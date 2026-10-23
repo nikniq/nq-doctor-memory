@@ -3,6 +3,7 @@ import { dealBoard, hashString, seededRandom, shuffle } from '../../resources/js
 import { formatTime, isBetter, starsFor } from '../../resources/js/game/scoring.js';
 import { currentStreak, nextStreak, yesterdayOf } from '../../resources/js/game/streak.js';
 import { nextIndex } from '../../resources/js/game/grid.js';
+import { cardLabel, positionOf, turnMessage, winMessage } from '../../resources/js/game/announce.js';
 import { CONNECTIVITY_MESSAGE, dailyDateChanged, firstErrorMessage, requestError } from '../../resources/js/game/session.js';
 
 const icons = Array.from({ length: 12 }, (_, i) => ({ id: i + 1, icon: '•', name: `Card ${i + 1}` }));
@@ -134,5 +135,35 @@ describe('game session helpers', () => {
         const outage = requestError(500, {});
         expect(outage.message).toBe(CONNECTIVITY_MESSAGE);
         expect(outage.retryable).toBe(true);
+    });
+});
+
+describe('screen-reader text', () => {
+    it('locates cards by row and column at any width', () => {
+        expect(positionOf(0, 4)).toEqual({ row: 1, col: 1 });
+        expect(positionOf(5, 3)).toEqual({ row: 2, col: 3 });
+        expect(positionOf(9, 5)).toEqual({ row: 2, col: 5 });
+        expect(positionOf(35, 6)).toEqual({ row: 6, col: 6 });
+    });
+
+    it('labels a card in each state', () => {
+        const card = { name: 'Stethoscope', isFlipped: false, isMatched: false };
+        expect(cardLabel(card, 6, 4)).toBe('Row 2, column 3, face down');
+        expect(cardLabel({ ...card, isFlipped: true }, 6, 4)).toBe('Row 2, column 3, Stethoscope');
+        expect(cardLabel({ ...card, isMatched: true }, 6, 4)).toBe('Row 2, column 3, Stethoscope, matched');
+    });
+
+    it('describes misses, matches and whose turn it is', () => {
+        expect(turnMessage({ matched: false, a: 'Pills', b: 'Syringe', turn: 6 })).toBe('No match: Pills and Syringe. Turn 6.');
+        expect(turnMessage({ matched: false, a: 'Pills', b: 'Syringe', turn: 6, players: 2, nextPlayer: 2 }))
+            .toBe("No match: Pills and Syringe. Turn 6. Player 2's turn.");
+        expect(turnMessage({ matched: true, a: 'Heart', pairsFound: 3, pairs: 8, turn: 5, fact: 'It beats a lot.' }))
+            .toBe('Match: Heart. 3 of 8 pairs. Turn 5. It beats a lot.');
+    });
+
+    it('sums up a finished game', () => {
+        expect(winMessage({ players: 1, moves: 10, stars: 3 })).toBe('All pairs found in 10 turns. 3 of 3 stars.');
+        expect(winMessage({ players: 2, playerScores: [4, 2] })).toBe('All pairs found. Player 1 wins, 4 to 2.');
+        expect(winMessage({ players: 2, playerScores: [3, 3] })).toBe("All pairs found. It's a tie, 3 to 3.");
     });
 });

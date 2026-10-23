@@ -17,6 +17,7 @@ import { dealBoard, hashString, seededRandom } from './game/random.js';
 import { formatTime, isBetter, starsFor } from './game/scoring.js';
 import { nextIndex } from './game/grid.js';
 import { CONNECTIVITY_MESSAGE, dailyDateChanged, requestError } from './game/session.js';
+import { cardLabel, turnMessage, winMessage } from './game/announce.js';
 
 const app = document.getElementById('app');
 
@@ -74,6 +75,7 @@ if (app) {
         fact: document.getElementById('fact'),
         factIcon: document.getElementById('factIcon'),
         factText: document.getElementById('factText'),
+        announcer: document.getElementById('announcer'),
     };
 
     const defaultDifficulty = difficulties[app.dataset.defaultDifficulty] ? app.dataset.defaultDifficulty : Object.keys(difficulties)[0];
@@ -375,7 +377,7 @@ if (app) {
         button.type = 'button';
         button.className = 'card';
         button.dataset.cardId = card.uniqueId;
-        button.setAttribute('aria-label', 'Hidden card');
+        button.setAttribute('aria-label', cardLabel(card, card.uniqueId, boardColumns()));
 
         const inner = document.createElement('div');
         inner.className = 'card__inner';
@@ -387,18 +389,11 @@ if (app) {
         cross.setAttribute('aria-hidden', 'true');
         back.append(cross);
 
+        // The front stays empty while the card is face down, so the board
+        // cannot be read from the page (select-all, view source, extensions).
         const front = document.createElement('div');
         front.className = 'card__face card__front';
 
-        const icon = document.createElement('span');
-        icon.className = 'card__icon';
-        icon.textContent = card.icon;
-
-        const name = document.createElement('span');
-        name.className = 'card__name';
-        name.textContent = card.name;
-
-        front.append(icon, name);
         inner.append(back, front);
         button.append(inner);
 
@@ -448,6 +443,16 @@ if (app) {
             renderPlayers(); // a match keeps the turn
 
             showFact(a);
+            announce(turnMessage({
+                matched: true,
+                a: a.name,
+                pairsFound: matchedPairs,
+                pairs: level().pairs,
+                turn: moves,
+                players: playerCount,
+                nextPlayer: currentPlayer + 1,
+                fact: a.fact ?? '',
+            }));
 
             if (matchedPairs === level().pairs) {
                 stopTimer();
@@ -479,6 +484,22 @@ if (app) {
                 updateCard(b, 'card--wrong');
                 flipped = [];
                 canFlip = true;
+                announce(turnMessage({
+                    matched: false,
+                    a: a.name,
+                    b: b.name,
+                    turn: moves,
+                    players: playerCount,
+                    nextPlayer: currentPlayer + 1,
+                }));
+                // Empty the faces once they have turned away (0.6 s flip).
+                later(() => {
+                    [a, b].forEach((card) => {
+                        if (!card.isFlipped && !card.isMatched) {
+                            clearFront(el.board.querySelector(`[data-card-id="${card.uniqueId}"]`));
+                        }
+                    });
+                }, 650);
             }, 900);
         }
     }
@@ -487,8 +508,9 @@ if (app) {
         const button = el.board.querySelector(`[data-card-id="${card.uniqueId}"]`);
         if (!button) return;
 
+        if (card.isFlipped || card.isMatched) fillFront(button, card);
         button.classList.toggle('card--flipped', card.isFlipped);
-        button.setAttribute('aria-label', card.isFlipped || card.isMatched ? card.name : 'Hidden card');
+        button.setAttribute('aria-label', cardLabel(card, card.uniqueId, boardColumns()));
 
         if (effect) {
             button.classList.remove(effect);
@@ -501,6 +523,38 @@ if (app) {
             // Let the flip finish before fading the matched pair.
             later(() => button.classList.add('card--matched'), 600);
         }
+    }
+
+    function fillFront(button, card) {
+        const front = button.querySelector('.card__front');
+        if (!front || front.childElementCount) return;
+        const icon = document.createElement('span');
+        icon.className = 'card__icon';
+        icon.textContent = card.icon;
+        const name = document.createElement('span');
+        name.className = 'card__name';
+        name.textContent = card.name;
+        front.append(icon, name);
+    }
+
+    function clearFront(button) {
+        button?.querySelector('.card__front')?.replaceChildren();
+    }
+
+    function relabelCards() {
+        const columns = boardColumns();
+        cards.forEach((card) => {
+            el.board.querySelector(`[data-card-id="${card.uniqueId}"]`)?.setAttribute('aria-label', cardLabel(card, card.uniqueId, columns));
+        });
+    }
+
+    function announce(message) {
+        if (!el.announcer) return;
+        // Clear first so repeating the same words is still read out.
+        el.announcer.textContent = '';
+        later(() => {
+            el.announcer.textContent = message;
+        }, 50);
     }
 
     function setRovingFocus(active) {
@@ -646,6 +700,7 @@ if (app) {
         renderScoreForm();
 
         openDialog();
+        announce(winMessage(result));
         (el.playerName.hidden ? el.submitScore : el.playerName).focus();
         launchConfetti();
     }
@@ -695,6 +750,7 @@ if (app) {
         el.share.textContent = 'Share result';
 
         openDialog();
+        announce(winMessage(result));
         el.playAgain.focus();
         launchConfetti();
     }
@@ -905,6 +961,7 @@ if (app) {
     });
 
     el.board.addEventListener('keydown', handleBoardKeydown);
+    window.matchMedia?.('(max-width: 640px)').addEventListener?.('change', relabelCards);
     el.reset.addEventListener('click', newGame);
     el.playAgain.addEventListener('click', newGame);
     el.share.addEventListener('click', shareResult);

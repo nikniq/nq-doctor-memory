@@ -69,7 +69,7 @@
                 </p>
                 <p id="dailyNotice" class="game__hint game__hint--alert" role="status" hidden>A new daily challenge is ready. Press New Game to play it.</p>
 
-                <div id="playersBar" class="players" role="status" hidden>
+                <div id="playersBar" class="players" hidden>
                     <div class="players__card" data-player="0">
                         <span class="players__name">Player 1</span>
                         <span class="players__score" id="playerScore0">0</span>
@@ -101,7 +101,8 @@
             </header>
 
             <main class="game__main">
-                <p id="boardHelp" class="sr-only">Use the arrow keys to move between cards and Enter or Space to flip one.</p>
+                <p id="boardHelp" class="sr-only">Use the arrow keys to move between cards, Home and End to jump to the first and last card, and Enter or Space to flip one. Each turn's result is read out.</p>
+                <p id="announcer" class="sr-only" aria-live="polite" aria-atomic="true"></p>
                 <div id="gameBoard" class="game__board" role="group" aria-label="Memory cards" aria-describedby="boardHelp"></div>
 
                 <section class="leaderboard" aria-labelledby="leaderboardTitle">
@@ -152,7 +153,7 @@
             </div>
         </dialog>
 
-        <div id="fact" class="fact" role="status" hidden>
+        <div id="fact" class="fact" hidden>
             <span id="factIcon" class="fact__icon" aria-hidden="true"></span>
             <span id="factText" class="fact__text"></span>
         </div>

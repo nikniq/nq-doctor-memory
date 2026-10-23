@@ -10,6 +10,7 @@ import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { chromium } from 'playwright';
+import { dealBoard, hashString, seededRandom } from '../../resources/js/game/random.js';
 
 const PORT = 8790;
 const BASE = `http://127.0.0.1:${PORT}`;
@@ -61,9 +62,30 @@ async function shot(page, name) {
     if (shotsDir) await page.screenshot({ path: `${shotsDir}/${name}.png`, fullPage: true });
 }
 
-/** Flip every pair, reading names off the card faces. Optionally make one miss first. */
+/**
+ * Card names in board order. Face-down cards carry nothing in the DOM, so
+ * the layout is worked out the way the game deals a daily board: same
+ * cards, same seed (date + grid), same shuffle.
+ */
+async function boardNames(page) {
+    const board = await page.evaluate(() => {
+        const app = document.getElementById('app');
+        const grid = document.getElementById('difficulty').value;
+        return {
+            today: app.dataset.today,
+            grid,
+            cards: JSON.parse(app.dataset.cards),
+            pairs: JSON.parse(app.dataset.difficulties)[grid].pairs,
+            daily: document.querySelector('.game__mode[data-mode="daily"]').getAttribute('aria-pressed') === 'true',
+        };
+    });
+    if (!board.daily) throw new Error('the solver needs daily mode, where the layout is known');
+    return dealBoard(board.cards, board.pairs, seededRandom(hashString(`${board.today}:${board.grid}`))).map((c) => c.name);
+}
+
+/** Flip every pair. Optionally make one miss first. */
 async function solve(page, { miss = false } = {}) {
-    const names = await page.$$eval('.card', (cards) => cards.map((c) => c.querySelector('.card__name').textContent));
+    const names = await boardNames(page);
     if (miss) {
         const other = names.findIndex((n) => n !== names[0]);
         await page.click(`.card[data-card-id="0"]`);
@@ -99,11 +121,18 @@ try {
     });
 
     await page.goto(BASE);
+    await page.click('.game__mode[data-mode="daily"]'); // daily boards have a known layout
     check((await page.$$('#difficulty option')).length === 6, 'six grid sizes offered');
     await page.selectOption('#difficulty', '6x6');
     check((await page.$$('.card')).length === 36, '6 × 6 grid deals 36 cards');
     await page.selectOption('#difficulty', '4x3');
     check((await page.$$('.card')).length === 12, '4 × 3 grid deals 12 cards');
+    {
+        const allNames = await page.evaluate(() => JSON.parse(document.getElementById('app').dataset.cards).map((c) => c.name));
+        const boardText = await page.textContent('#gameBoard');
+        check(!allNames.some((n) => boardText.includes(n)), 'face-down cards reveal nothing in the page');
+        check((await page.getAttribute('.card[data-card-id="0"]', 'aria-label')).startsWith('Row 1, column 1'), 'cards are labelled by row and column');
+    }
     const boardBottom = await page.$eval('#gameBoard', (b) => b.getBoundingClientRect().bottom);
     check(boardBottom <= 900, `easy board fits a 900px-high window (bottom at ${Math.round(boardBottom)}px)`);
     await shot(page, 'desktop-start');
@@ -141,12 +170,15 @@ try {
     check(await page.textContent('#moves') === '0', 'new game resets moves');
 
     // Daily boards are identical across reloads.
-    await page.click('.game__mode[data-mode="daily"]');
-    const daily1 = await page.$$eval('.card__name', (els) => els.map((e) => e.textContent).join());
+    const firstFace = async () => {
+        await page.click('.card[data-card-id="0"]');
+        return page.textContent('.card[data-card-id="0"] .card__name');
+    };
+    const daily1 = await firstFace();
     await page.reload();
-    const daily2 = await page.$$eval('.card__name', (els) => els.map((e) => e.textContent).join());
-    check(daily1 === daily2, 'daily board is the same after reload');
-    await page.click('.game__mode[data-mode="free"]');
+    const daily2 = await firstFace();
+    check(daily1 === daily2 && daily1 === (await boardNames(page))[0], 'daily board is the same after reload and matches the deal');
+    await page.click('#resetBtn');
 
     // Two players: a miss passes the turn.
     await page.selectOption('#players', '2');
@@ -169,7 +201,7 @@ try {
     await page.selectOption('#players', '1');
     await page.selectOption('#difficulty', '4x3');
 
-    const names = () => page.$$eval('.card', (cards) => cards.map((c) => c.querySelector('.card__name').textContent));
+    const names = () => boardNames(page);
     const missPair = async () => {
         const n = await names();
         const other = n.findIndex((x) => x !== n[0]);
@@ -197,6 +229,13 @@ try {
 
     // (b) Two players: a miss followed by New Game keeps Player 1 on turn.
     await page.selectOption('#players', '2');
+    await missPair();
+    await page.waitForTimeout(1100);
+    {
+        const said = await page.textContent('#announcer');
+        check(said.includes('No match') && said.includes("Player 2's turn"), `a miss is announced with the next player ("${said}")`);
+    }
+    await page.click('#resetBtn');
     await missPair();
     await page.click('#resetBtn');
     await page.waitForTimeout(1200);
@@ -254,12 +293,15 @@ try {
         const laptop = await browser.newPage({ viewport: { width: 1366, height: 657 } });
         laptop.on('pageerror', (e) => errors.push(e.message));
         await laptop.goto(BASE);
+        await laptop.click('.game__mode[data-mode="daily"]');
         await laptop.selectOption('#difficulty', '6x6');
+        await solve(laptop); // faces exist only once revealed
+        await laptop.waitForTimeout(700);
         const faces = await laptop.$$eval('.card', (cards) => cards.map((c) => {
             const card = c.getBoundingClientRect();
             const icon = c.querySelector('.card__icon')?.getBoundingClientRect();
             const name = c.querySelector('.card__name')?.getBoundingClientRect();
-            return { fits: !icon || icon.width <= card.width + 0.5, named: !name || name.height > 0 };
+            return { fits: Boolean(icon) && icon.width <= card.width + 0.5, named: Boolean(name) && name.height > 0 };
         }));
         check(faces.every((f) => f.fits && f.named), '6 × 6 card faces fit at 1366 × 657');
 
@@ -306,6 +348,7 @@ try {
     check((await account.textContent('.flash')).includes('verified'), 'emailed link verifies the account');
     check(await account.isVisible(`.topnav >> text=${name}`), 'nav shows the player name once verified');
 
+    await account.click('.game__mode[data-mode="daily"]');
     await account.selectOption('#difficulty', '4x3');
     await solve(account);
     await account.waitForSelector('#winDialog[open]', { timeout: 3000 });

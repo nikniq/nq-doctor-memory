@@ -40,4 +40,13 @@ class GameTest extends TestCase
             ->assertSee('Page not found')
             ->assertSee('href="'.url('/').'"', false);
     }
+
+    public function test_one_live_region_announces_the_game(): void
+    {
+        $html = $this->get('/')->getContent();
+
+        $this->assertMatchesRegularExpression('/id="announcer"[^>]*aria-live="polite"/', $html);
+        $this->assertDoesNotMatchRegularExpression('/id="fact"[^>]*role="status"/', $html);
+        $this->assertDoesNotMatchRegularExpression('/id="playersBar"[^>]*role="status"/', $html);
+    }
 }
