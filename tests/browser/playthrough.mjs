@@ -249,6 +249,26 @@ try {
     check((await page.textContent('#leaderboardTitle')).includes('4 × 3') && (await page.$$('.leaderboard__row')).length > 0, 'leaderboard shows the grid that is selected now');
     await page.unroute('**/scores?difficulty=6x6*');
 
+    // Card faces fit on the densest grid at a common laptop size.
+    {
+        const laptop = await browser.newPage({ viewport: { width: 1366, height: 657 } });
+        laptop.on('pageerror', (e) => errors.push(e.message));
+        await laptop.goto(BASE);
+        await laptop.selectOption('#difficulty', '6x6');
+        const faces = await laptop.$$eval('.card', (cards) => cards.map((c) => {
+            const card = c.getBoundingClientRect();
+            const icon = c.querySelector('.card__icon')?.getBoundingClientRect();
+            const name = c.querySelector('.card__name')?.getBoundingClientRect();
+            return { fits: !icon || icon.width <= card.width + 0.5, named: !name || name.height > 0 };
+        }));
+        check(faces.every((f) => f.fits && f.named), '6 × 6 card faces fit at 1366 × 657');
+
+        await laptop.emulateMedia({ forcedColors: 'active' });
+        const border = await laptop.$eval('.card__back', (back) => getComputedStyle(back).borderTopStyle);
+        check(border !== 'none', `cards keep a border under forced colours (${border})`);
+        await laptop.close();
+    }
+
     // Phone width.
     const phone = await browser.newPage({ viewport: { width: 375, height: 800 } });
     phone.on('pageerror', (e) => errors.push(e.message));
@@ -302,6 +322,9 @@ try {
 
     await account.goto(`${BASE}/leaderboard?grid=4x3`);
     check(await account.isVisible(`.table >> text=${name}`), 'player appears in the 4 × 3 rankings');
+    await account.setViewportSize({ width: 375, height: 800 });
+    check(await account.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), 'rankings with rows do not scroll sideways at 375px');
+    await account.setViewportSize({ width: 1280, height: 900 });
     await shot(account, 'rankings');
 
     check(errors.length === 0, `no console errors${errors.length ? `: ${errors.join(' | ')}` : ''}`);

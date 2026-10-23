@@ -163,6 +163,7 @@
 }
 
 .game__button {
+    color: var(--game-button-text);
     padding: 0.75em 2em;
     border: none;
     border-radius: 8px;
@@ -171,7 +172,6 @@
     font-weight: 600;
     cursor: pointer;
     background-color: var(--game-button);
-    color: var(--game-card-front);
     transition: transform 0.2s, filter 0.2s;
 }
 
@@ -197,6 +197,7 @@
 /* Cards */
 
 .card {
+    container-type: size;
     aspect-ratio: 3 / 4;
     perspective: 1000px;
     cursor: pointer;
@@ -295,15 +296,11 @@
 }
 
 .card__icon {
-    font-size: 4em;
+    /* Sized by the card itself (container query units) so faces fit on every grid. */
+    font-size: min(4em, 42cqh, 60cqi);
     margin-bottom: 0.25em;
     line-height: 1;
-}
-
-@media (max-width: 640px) {
-    .card__icon {
-        font-size: 2.5em;
-    }
+    color: var(--game-text);
 }
 
 .card__name {
@@ -312,24 +309,14 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: 0.75em;
+    font-size: min(0.75em, max(9px, 11cqh));
     font-weight: 600;
     color: var(--game-text);
 }
 
-/* Five or more columns on a phone: smaller faces so names still fit. */
 @media (max-width: 640px) {
     .game__board[data-dense] {
         gap: 0.4em;
-    }
-
-    .game__board[data-dense] .card__icon {
-        font-size: 1.6em;
-        margin-bottom: 0.15em;
-    }
-
-    .game__board[data-dense] .card__name {
-        font-size: 0.55em;
     }
 
     .game__board[data-dense] .card__face {
@@ -434,7 +421,7 @@
 .win__record {
     margin: 0 0 0.5em 0;
     font-weight: bold;
-    color: var(--game-button);
+    color: var(--game-text);
 }
 
 .win__form {
@@ -457,13 +444,14 @@
     flex: 1;
     min-width: 0;
     padding: 0.6em 0.75em;
-    border: 2px solid rgba(0, 0, 0, 0.15);
+    border: 2px solid rgba(0, 0, 0, 0.45);
     border-radius: 8px;
     font: inherit;
 }
 
 .win__row input:focus-visible {
-    outline: none;
+    outline: 3px solid var(--game-card-back);
+    outline-offset: 2px;
     border-color: var(--game-button);
 }
 
@@ -785,6 +773,7 @@
 
 .site .topnav__cta {
     background-color: var(--game-button);
+    color: var(--game-button-text);
 }
 
 .topnav__warn {
@@ -843,6 +832,7 @@
     margin: 0 auto;
     padding: 2em 1em 3em;
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: 1.5em;
 }
 
@@ -917,7 +907,7 @@
 
 .field__input {
     padding: 0.65em 0.75em;
-    border: 2px solid rgba(0, 0, 0, 0.15);
+    border: 2px solid rgba(0, 0, 0, 0.45);
     border-radius: 8px;
     font: inherit;
     color: inherit;
@@ -925,7 +915,8 @@
 }
 
 .field__input:focus-visible {
-    outline: none;
+    outline: 3px solid var(--game-card-back);
+    outline-offset: 2px;
     border-color: var(--game-button);
 }
 
@@ -961,7 +952,7 @@
 
 .btn--primary {
     background-color: var(--game-button);
-    color: var(--game-card-front);
+    color: var(--game-button-text);
 }
 
 .site .btn--google {
@@ -982,7 +973,7 @@
     gap: 0.75em;
     margin: 1em 0;
     font-size: 0.85em;
-    opacity: 0.6;
+    opacity: 0.75;
 }
 
 .divider::before,
@@ -1011,7 +1002,7 @@
 .tabs__tab[aria-current="page"] {
     background-color: var(--game-button);
     border-color: var(--game-button);
-    color: var(--game-card-front);
+    color: var(--game-button-text);
 }
 
 .table-wrap {
@@ -1048,7 +1039,7 @@
 }
 
 .muted {
-    opacity: 0.6;
+    opacity: 0.75;
     font-weight: normal;
 }
 
@@ -1123,4 +1114,40 @@
     opacity: 1;
     font-weight: 600;
     color: #fde68a;
+}
+
+/* The new-record line carries a star so it is not told by colour alone. */
+.win__record::before {
+    content: '⭐ ';
+}
+
+/* Phones: room below the board so the last row can scroll clear of the fact toast. */
+@media (max-width: 640px) {
+    .game__main {
+        padding-bottom: 6em;
+    }
+}
+
+/* Windows high-contrast and other forced-colour themes. */
+@media (forced-colors: active) {
+    .card__face {
+        border: 2px solid CanvasText;
+    }
+
+    .card__cross::before,
+    .card__cross::after {
+        background: CanvasText;
+        forced-color-adjust: none;
+    }
+
+    .card--matched .card__face {
+        border-style: dashed;
+    }
+
+    .card:focus-visible,
+    .game__button:focus-visible,
+    .field__input:focus-visible,
+    .win__row input:focus-visible {
+        outline-color: Highlight;
+    }
 }

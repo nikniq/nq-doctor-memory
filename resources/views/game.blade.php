@@ -115,6 +115,8 @@
         </div>
 
         <dialog id="winDialog" class="win" aria-labelledby="winMessage">
+            {{-- Inside the dialog so it draws in the top layer, above the backdrop. --}}
+            <div id="confetti" class="confetti" aria-hidden="true"></div>
             <div class="win__emoji" aria-hidden="true">🎉</div>
             <h2 id="winMessage" class="win__message">{{ $winMessage }}</h2>
             <div id="winStars" class="win__stars" role="img" aria-label=""></div>
@@ -155,6 +157,5 @@
             <span id="factText" class="fact__text"></span>
         </div>
 
-        <div id="confetti" class="confetti" aria-hidden="true"></div>
     </div>
 @endsection

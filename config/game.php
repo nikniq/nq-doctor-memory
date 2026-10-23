@@ -26,6 +26,8 @@ return [
         'card_front' => env('GAME_CARD_FRONT_COLOR', '#ffffff'),
         'text' => env('GAME_TEXT_COLOR', '#1e293b'),
         'button' => env('GAME_BUTTON_COLOR', '#10b981'),
+        // Text on buttons. Must keep a 4.5:1 contrast with 'button' (tested).
+        'button_text' => env('GAME_BUTTON_TEXT_COLOR', '#1e293b'),
     ],
 
     /*

@@ -26,8 +26,9 @@
             --game-card-front: {{ $colors['card_front'] }};
             --game-text: {{ $colors['text'] }};
             --game-button: {{ $colors['button'] }};
+            --game-button-text: {{ $colors['button_text'] }};
             --game-font: '{{ config('game.font_family') }}', Arial, sans-serif;
-            --game-font-size: {{ (int) config('game.font_size') }}px;
+            --game-font-size: {{ (int) config('game.font_size') / 16 }}rem; /* rem, so browser text size settings apply */
         }
     </style>
 
