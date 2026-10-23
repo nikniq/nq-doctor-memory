@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AccountController;
+use App\Http\Controllers\AccountSettingsController;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\Auth\EmailVerificationController;
 use App\Http\Controllers\Auth\GoogleController;
@@ -59,5 +60,10 @@ Route::middleware('auth')->group(function () {
         ->middleware('throttle:verification-send')
         ->name('verification.send');
 
-    Route::get('/account', AccountController::class)->middleware('verified')->name('account');
+    Route::middleware('verified')->group(function () {
+        Route::get('/account', AccountController::class)->name('account');
+        Route::get('/account/settings', [AccountSettingsController::class, 'edit'])->name('account.settings');
+        Route::patch('/account/name', [AccountSettingsController::class, 'updateName'])->name('account.name');
+        Route::patch('/account/privacy', [AccountSettingsController::class, 'updatePrivacy'])->name('account.privacy');
+    });
 });

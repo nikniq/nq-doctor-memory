@@ -31,6 +31,7 @@ class GoogleLoginTest extends TestCase
         Socialite::fake('google', GoogleUser::fake(array_merge([
             'id' => 'google-123',
             'name' => 'Meredith Grey',
+            'given_name' => 'Meredith',
             'email' => 'Meredith@Example.com',
             'avatar' => 'https://example.com/a.jpg',
             'email_verified' => true,
@@ -41,12 +42,14 @@ class GoogleLoginTest extends TestCase
     {
         $this->fakeGoogle();
 
-        $this->get('/auth/google/callback')->assertRedirect(route('game'));
+        $this->get('/auth/google/callback')
+            ->assertRedirect(route('account.settings'))
+            ->assertSessionHas('status', 'Welcome! You appear in the rankings as Meredith. You can change that here.');
 
         $user = User::where('google_id', 'google-123')->sole();
         $this->assertAuthenticatedAs($user);
         $this->assertSame('meredith@example.com', $user->email);
-        $this->assertSame('Meredith Grey', $user->name);
+        $this->assertSame('Meredith', $user->name);
         $this->assertTrue($user->hasVerifiedEmail());
         $this->assertFalse($user->hasPassword());
     }
@@ -126,7 +129,17 @@ class GoogleLoginTest extends TestCase
             ->get('/account')
             ->assertRedirect(route('login'));
 
-        $this->assertSame('Meredith Grey', $owner->name);
+        $this->assertSame('Meredith', $owner->name);
         $this->assertNull($earlierGame->fresh()->user_id);
+    }
+
+    public function test_a_returning_player_keeps_their_chosen_name_and_goes_home(): void
+    {
+        $user = User::factory()->google()->create(['google_id' => 'google-123', 'name' => 'Dr G']);
+        $this->fakeGoogle();
+
+        $this->get('/auth/google/callback')->assertRedirect(route('game'));
+
+        $this->assertSame('Dr G', $user->fresh()->name);
     }
 }

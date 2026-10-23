@@ -1251,3 +1251,23 @@
         bottom: auto;
     }
 }
+
+.page__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1em;
+    flex-wrap: wrap;
+}
+
+.site .btn--secondary {
+    background-color: transparent;
+    color: var(--game-card-front);
+    border: 2px solid var(--game-card-front);
+    text-decoration: none;
+}
+
+.form__hint--center {
+    margin-top: 0.5em;
+    text-align: center;
+}

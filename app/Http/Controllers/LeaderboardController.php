@@ -32,7 +32,7 @@ class LeaderboardController extends Controller
             ->orderBy('best_turns')
             ->orderBy('average_turns')
             ->limit(25)
-            ->with('user:id,name,avatar_url')
+            ->with('user:id,name,avatar_url,show_avatar')
             ->get();
 
         // Turns per pair evens out grid sizes: 1.0 is a perfect game anywhere.
@@ -44,7 +44,7 @@ class LeaderboardController extends Controller
             ->orderBy('turns_per_pair')
             ->orderByDesc('games_played')
             ->limit(25)
-            ->with('user:id,name,avatar_url')
+            ->with('user:id,name,avatar_url,show_avatar')
             ->get();
 
         return view('leaderboard', [
@@ -65,6 +65,6 @@ class LeaderboardController extends Controller
             ->finished()
             ->ranked()
             ->where('players', 1)
-            ->whereHas('user', fn (Builder $query) => $query->whereNotNull('email_verified_at'));
+            ->whereHas('user', fn (Builder $query) => $query->whereNotNull('email_verified_at')->where('show_in_rankings', true));
     }
 }

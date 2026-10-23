@@ -12,6 +12,7 @@
                 @endif
                 {{ auth()->user()->name }}
             </a>
+            <a href="{{ route('account.settings') }}" class="topnav__link" aria-label="Settings" title="Settings" @if (request()->routeIs('account.settings')) aria-current="page" @endif>⚙️</a>
         @else
             <a href="{{ route('verification.notice') }}" class="topnav__link topnav__warn">Verify email</a>
         @endif

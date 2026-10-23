@@ -2,7 +2,13 @@
 
 @section('content')
     <main class="page">
-        <h1 class="page__title">@include('partials.player', ['user' => $user])</h1>
+        <div class="page__head">
+            <h1 class="page__title">@include('partials.player', ['user' => $user, 'showAvatar' => true])</h1>
+            <a href="{{ route('account.settings') }}" class="btn btn--secondary">Settings</a>
+        </div>
+        @unless ($user->show_in_rankings)
+            <p class="page__intro">You are hidden from the public rankings. <a href="{{ route('account.settings') }}">Change this</a>.</p>
+        @endunless
 
         <dl class="tiles">
             <div class="tile"><dt>Games finished</dt><dd>{{ $gamesFinished }}</dd></div>

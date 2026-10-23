@@ -97,7 +97,7 @@ class ScoreTest extends TestCase
 
     public function test_leaderboard_is_ranked_scoped_to_a_grid_and_flags_registered_players(): void
     {
-        $user = User::factory()->create();
+        $user = User::factory()->create(['name' => 'Fast']);
         Score::create(['player_name' => 'Slow', 'difficulty' => '4x3', 'moves' => 9, 'seconds' => 90]);
         Score::create(['user_id' => $user->id, 'player_name' => 'Fast', 'difficulty' => '4x3', 'moves' => 9, 'seconds' => 40]);
         Score::create(['player_name' => 'Few', 'difficulty' => '4x3', 'moves' => 7, 'seconds' => 99]);

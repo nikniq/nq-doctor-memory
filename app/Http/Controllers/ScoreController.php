@@ -29,10 +29,12 @@ class ScoreController extends Controller
             ->forBoard($data['difficulty'], $playedOn)
             ->ranked()
             ->limit(config('game.leaderboard_size'))
+            ->with('user:id,name')
             ->get(['id', 'user_id', 'player_name', 'moves', 'seconds', 'created_at'])
             ->map(fn (Score $score) => [
                 'id' => $score->id,
-                'player_name' => $score->player_name,
+                // Registered rows follow the account's current name.
+                'player_name' => $score->user?->name ?? $score->player_name,
                 'moves' => $score->moves,
                 'seconds' => $score->seconds,
                 'registered' => $score->user_id !== null,

@@ -45,6 +45,11 @@ class GoogleController extends Controller
         Auth::login($user, remember: true);
         request()->session()->regenerate();
 
+        if ($user->wasRecentlyCreated) {
+            return redirect()->route('account.settings')
+                ->with('status', "Welcome! You appear in the rankings as {$user->name}. You can change that here.");
+        }
+
         return redirect()->intended(route('game'));
     }
 
@@ -56,6 +61,17 @@ class GoogleController extends Controller
     {
         DB::table(config('session.table', 'sessions'))->where('user_id', $user->id)->delete();
         Game::where('user_id', $user->id)->update(['user_id' => null]);
+    }
+
+    /**
+     * First name only by default: the full name and photo of a Google
+     * account should not appear publicly without the player choosing so.
+     */
+    private function displayName(SocialiteUser $googleUser, string $email): string
+    {
+        $given = $googleUser->getRaw()['given_name'] ?? null;
+
+        return Str::limit(trim($given ?: ($googleUser->getName() ?: Str::before($email, '@'))), 24, '');
     }
 
     public static function isConfigured(): bool
@@ -83,13 +99,13 @@ class GoogleController extends Controller
         if (! $user) {
             $user = new User;
             $user->forceFill([
-                'name' => Str::limit($googleUser->getName() ?: Str::before($email, '@'), 24, ''),
+                'name' => $this->displayName($googleUser, $email),
                 'email' => $email,
                 'password' => null,
             ]);
         } elseif (! $user->hasVerifiedEmail()) {
             $user->forceFill([
-                'name' => Str::limit($googleUser->getName() ?: Str::before($email, '@'), 24, ''),
+                'name' => $this->displayName($googleUser, $email),
                 'password' => null,
                 'remember_token' => Str::random(60),
             ]);

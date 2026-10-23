@@ -12,11 +12,11 @@
             <h2 class="panel__title">Overall</h2>
             <p class="panel__intro">
                 Ranked by average turns per pair across all grids. 1.00 is a perfect game.
-                Players need {{ $minimumGames }} finished games to be ranked.
+                Players need {{ $minimumGames }} finished {{ \Illuminate\Support\Str::plural('game', $minimumGames) }} to be ranked.
             </p>
 
             @if ($overallRankings->isEmpty())
-                <p class="empty">Nobody has finished {{ $minimumGames }} games yet.</p>
+                <p class="empty">Nobody has finished {{ $minimumGames }} {{ \Illuminate\Support\Str::plural('game', $minimumGames) }} yet.</p>
             @else
                 <div class="table-wrap">
                     <table class="table">
