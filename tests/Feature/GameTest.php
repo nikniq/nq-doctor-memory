@@ -32,4 +32,12 @@ class GameTest extends TestCase
         config(['services.google_analytics.measurement_id' => 'G-TEST123']);
         $this->get('/')->assertSee('googletagmanager.com/gtag/js?id=G-TEST123', false);
     }
+
+    public function test_a_missing_page_offers_a_way_back(): void
+    {
+        $this->get('/no-such-page')
+            ->assertNotFound()
+            ->assertSee('Page not found')
+            ->assertSee('href="'.url('/').'"', false);
+    }
 }

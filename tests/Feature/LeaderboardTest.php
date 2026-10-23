@@ -57,4 +57,11 @@ class LeaderboardTest extends TestCase
     {
         $this->get('/leaderboard?grid=9x9')->assertSessionHasErrors('grid');
     }
+
+    public function test_fastest_times_over_an_hour_show_their_full_minutes(): void
+    {
+        Game::factory()->for(User::factory())->finished(turns: 12, seconds: 3700)->create();
+
+        $this->get('/leaderboard?grid=4x4')->assertSee('61:40')->assertDontSee('01:40');
+    }
 }

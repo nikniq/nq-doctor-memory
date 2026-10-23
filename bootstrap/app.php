@@ -5,6 +5,7 @@ use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
+use Illuminate\Routing\Exceptions\InvalidSignatureException;
 
 $app = Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -18,6 +19,17 @@ $app = Application::configure(basePath: dirname(__DIR__))
         $middleware->web(append: [SecurityHeaders::class]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
+        // An expired or altered verification link: say so and offer a way on.
+        $exceptions->render(function (InvalidSignatureException $exception, Request $request) {
+            if (! $request->routeIs('verification.verify')) {
+                return null;
+            }
+
+            $status = 'That link has expired or is invalid. Log in and we will send a new one.';
+
+            return redirect()->route($request->user() ? 'verification.notice' : 'login')->with('status', $status);
+        });
+
         $exceptions->shouldRenderJsonWhen(
             fn (Request $request) => $request->is('api/*') || $request->expectsJson(),
         );

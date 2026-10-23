@@ -34,4 +34,12 @@ class AccountTest extends TestCase
         });
         $response->assertViewHas('recentGames', fn ($games) => $games->count() === 3);
     }
+
+    public function test_games_over_an_hour_show_their_full_minutes(): void
+    {
+        $user = User::factory()->create();
+        Game::factory()->for($user)->finished(turns: 12, seconds: 3700)->create();
+
+        $this->actingAs($user)->get('/account')->assertSee('61:40')->assertDontSee('01:40');
+    }
 }

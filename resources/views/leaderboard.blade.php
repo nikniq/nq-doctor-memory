@@ -65,7 +65,7 @@
                                     <td>@include('partials.player', ['user' => $row->user])</td>
                                     <td class="num">{{ $row->best_turns }}</td>
                                     <td class="num">{{ number_format($row->average_turns, 1) }}</td>
-                                    <td class="num">{{ gmdate('i:s', (int) $row->best_seconds) }}</td>
+                                    <td class="num">{{ \App\Support\Duration::format((int) $row->best_seconds) }}</td>
                                     <td class="num">{{ $row->games_played }}</td>
                                 </tr>
                             @endforeach

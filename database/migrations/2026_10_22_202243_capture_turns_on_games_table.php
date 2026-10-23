@@ -29,10 +29,12 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('games', function (Blueprint $table) {
+            // MySQL reuses the composite index for the foreign key, so the key
+            // must go before the index or the drop fails with error 1553.
+            $table->dropForeign(['user_id']);
             $table->dropIndex(['user_id', 'finished_at']);
             $table->dropIndex(['difficulty', 'players', 'finished_at']);
-            $table->dropConstrainedForeignId('user_id');
-            $table->dropColumn(['players', 'pairs', 'turns', 'seconds', 'finished_at']);
+            $table->dropColumn(['user_id', 'players', 'pairs', 'turns', 'seconds', 'finished_at']);
         });
 
         Schema::table('games', function (Blueprint $table) {

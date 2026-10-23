@@ -51,7 +51,7 @@ class EmailVerificationTest extends TestCase
         $user = User::factory()->unverified()->create();
 
         $this->get($this->verificationUrl($user, sha1('someone@else.com')))->assertForbidden();
-        $this->get("/email/verify/{$user->id}/".sha1($user->email))->assertForbidden();
+        $this->get("/email/verify/{$user->id}/".sha1($user->email))->assertRedirect(route('login'));
 
         $this->assertFalse($user->fresh()->hasVerifiedEmail());
     }
@@ -85,5 +85,20 @@ class EmailVerificationTest extends TestCase
         }
 
         $this->actingAs($user)->get($this->verificationUrl($user))->assertRedirect(route('game'));
+    }
+
+    public function test_an_expired_link_explains_itself_instead_of_showing_an_error_page(): void
+    {
+        $user = User::factory()->unverified()->create();
+        $expired = URL::temporarySignedRoute('verification.verify', now()->subMinute(), [
+            'id' => $user->id,
+            'hash' => sha1($user->email),
+        ]);
+
+        $this->get($expired)
+            ->assertRedirect(route('login'))
+            ->assertSessionHas('status', 'That link has expired or is invalid. Log in and we will send a new one.');
+
+        $this->actingAs($user)->get($expired)->assertRedirect(route('verification.notice'));
     }
 }

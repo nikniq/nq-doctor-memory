@@ -26,7 +26,7 @@
                                 <td class="num">{{ $stats?->games_played ?? 0 }}</td>
                                 <td class="num">{{ $stats?->best_turns ?? '—' }}</td>
                                 <td class="num">{{ $stats ? number_format($stats->average_turns, 1) : '—' }}</td>
-                                <td class="num">{{ $stats ? gmdate('i:s', (int) $stats->best_seconds) : '—' }}</td>
+                                <td class="num">{{ $stats ? \App\Support\Duration::format((int) $stats->best_seconds) : '—' }}</td>
                             </tr>
                         @endforeach
                     </tbody>
@@ -51,7 +51,7 @@
                                     <td>{{ $grids[$game->difficulty]['label'] ?? $game->difficulty }}</td>
                                     <td>{{ $game->players === 2 ? 'Two players' : ($game->isDaily() ? 'Daily' : 'Free play') }}</td>
                                     <td class="num">{{ $game->turns }}</td>
-                                    <td class="num">{{ gmdate('i:s', $game->seconds) }}</td>
+                                    <td class="num">{{ \App\Support\Duration::format($game->seconds) }}</td>
                                 </tr>
                             @endforeach
                         </tbody>
