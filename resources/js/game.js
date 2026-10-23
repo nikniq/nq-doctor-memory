@@ -16,13 +16,14 @@ import { currentStreak, nextStreak } from './game/streak.js';
 import { dealBoard, hashString, seededRandom } from './game/random.js';
 import { formatTime, isBetter, starsFor } from './game/scoring.js';
 import { nextIndex } from './game/grid.js';
+import { CONNECTIVITY_MESSAGE, dailyDateChanged, requestError } from './game/session.js';
 
 const app = document.getElementById('app');
 
 if (app) {
     const icons = JSON.parse(app.dataset.cards || '[]');
     const difficulties = JSON.parse(app.dataset.difficulties || '{}');
-    const today = app.dataset.today;
+    let today = app.dataset.today; // the server's date at page load; updated if a new day starts
     const gameTitle = app.dataset.title || 'Memory Game';
     const gamesUrl = app.dataset.gamesUrl;
     const finishUrl = app.dataset.finishUrl;
@@ -60,6 +61,9 @@ if (app) {
         winSummary: document.getElementById('winSummary'),
         winRecord: document.getElementById('winRecord'),
         winSaved: document.getElementById('winSaved'),
+        scoreLabel: document.getElementById('scoreLabel'),
+        signedOut: document.getElementById('signedOutNotice'),
+        dailyNotice: document.getElementById('dailyNotice'),
         scoreForm: document.getElementById('scoreForm'),
         playerName: document.getElementById('playerName'),
         submitScore: document.getElementById('submitScore'),
@@ -80,8 +84,25 @@ if (app) {
     let playerCount = readStorage('players') === '2' ? 2 : 1;
     let currentPlayer = 0;
     let playerScores = [0, 0];
-    let gameSession = null; // promise resolving to the server's game token
+    let gameSession = null; // promise resolving to the start response: { token, account }
+    let startResult = null; // that response once it has arrived
     let finishRequest = null; // promise resolving once the server has recorded the finished game
+    let savedToAccount = false;
+
+    // Every timer belongs to one deal. A new game bumps the generation and
+    // cancels them, so nothing scheduled for the old board touches the new one.
+    let gameGeneration = 0;
+    const timers = new Set();
+
+    function later(fn, ms) {
+        const generation = gameGeneration;
+        const id = setTimeout(() => {
+            timers.delete(id);
+            if (generation === gameGeneration) fn();
+        }, ms);
+        timers.add(id);
+        return id;
+    }
 
     let cards = [];
     let flipped = [];
@@ -117,13 +138,13 @@ if (app) {
         }
     }
 
-    function bestKey() {
-        return mode === 'daily' ? `best:daily:${today}:${difficulty}` : `best:${difficulty}`;
+    function bestKey(board = { mode, today, difficulty }) {
+        return board.mode === 'daily' ? `best:daily:${board.today}:${board.difficulty}` : `best:${board.difficulty}`;
     }
 
-    function readBest() {
+    function readBest(key = bestKey()) {
         try {
-            const raw = readStorage(bestKey());
+            const raw = readStorage(key);
             return raw ? JSON.parse(raw) : null;
         } catch {
             return null;
@@ -255,8 +276,8 @@ if (app) {
         }
     }
 
-    function recordDailyWin() {
-        writeStorage('daily:streak', JSON.stringify(nextStreak(readStreak(), today)));
+    function recordDailyWin(day) {
+        writeStorage('daily:streak', JSON.stringify(nextStreak(readStreak(), day)));
     }
 
     function renderStreak() {
@@ -279,25 +300,47 @@ if (app) {
         });
     }
 
+    async function readJson(response) {
+        return response.json().catch(() => ({}));
+    }
+
     // Registered on the first flip so idle page loads create no rows.
     function ensureGameSession() {
         if (gameSession) return;
-        gameSession = postJson(gamesUrl, { difficulty, daily: mode === 'daily', players: playerCount })
-            .then((response) => (response.ok ? response.json() : Promise.reject(new Error('start failed'))))
-            .then((body) => body.token);
+        const generation = gameGeneration;
+        const payload = { difficulty, daily: mode === 'daily', players: playerCount };
+        if (mode === 'daily') payload.date = today;
+
+        gameSession = postJson(gamesUrl, payload).then(async (response) => {
+            const body = await readJson(response);
+            if (!response.ok) {
+                const error = requestError(response.status, body);
+                if (error.errors?.date && generation === gameGeneration) {
+                    // Yesterday's board: find out today's date from the server.
+                    loadLeaderboard();
+                }
+                throw error;
+            }
+            if (generation === gameGeneration) startResult = body;
+            return body;
+        });
         // Failures surface when the score is submitted, not mid-game.
         gameSession.catch(() => {});
     }
 
     /** Tell the server the game is over and how many turns it took. */
-    function finishGameSession() {
-        const session = gameSession;
-        if (!session) return Promise.reject(new Error('no session'));
-        finishRequest = session
-            .then((token) => postJson(finishUrl.replace('__GAME__', encodeURIComponent(token)), {
-                turns: moves,
-                seconds: Math.max(elapsed, 1),
-            }).then((response) => (response.ok ? token : Promise.reject(new Error('finish failed')))));
+    function finishGameSession(result) {
+        const session = gameSession ?? Promise.reject(requestError(0, null));
+        finishRequest = session.then((start) => postJson(finishUrl.replace('__GAME__', encodeURIComponent(start.token)), {
+            turns: result.moves,
+            seconds: result.seconds,
+        }).then(async (response) => {
+            const body = await readJson(response);
+            if (!response.ok) throw requestError(response.status, body);
+            return { token: start.token, account: start.account ?? null };
+        }, () => {
+            throw requestError(0, null);
+        }));
         finishRequest.catch(() => {});
         return finishRequest;
     }
@@ -305,6 +348,10 @@ if (app) {
     // --- Game state ------------------------------------------------------
 
     function initializeGame() {
+        gameGeneration++;
+        timers.forEach((id) => clearTimeout(id));
+        timers.clear();
+
         const random = mode === 'daily' ? seededRandom(hashString(`${today}:${difficulty}`)) : Math.random;
         cards = dealBoard(icons, level().pairs, random);
         flipped = [];
@@ -314,7 +361,10 @@ if (app) {
         lastSubmittedId = null;
         lastResult = null;
         gameSession = null;
+        startResult = null;
         finishRequest = null;
+        savedToAccount = false;
+        if (el.winSaved) el.winSaved.hidden = true;
         currentPlayer = 0;
         playerScores = [0, 0];
         resetTimer();
@@ -364,6 +414,9 @@ if (app) {
         const card = cards.find((c) => c.uniqueId === uniqueId);
         if (!card || card.isFlipped || card.isMatched) return;
 
+        // A new turn: the last fact has been seen, get it off the board.
+        if (flipped.length === 0) hideFact();
+
         startTimer();
         ensureGameSession();
         sounds.flip();
@@ -398,21 +451,23 @@ if (app) {
 
             if (matchedPairs === level().pairs) {
                 stopTimer();
-                finishGameSession().then(
-                    () => {
-                        if (accountName && el.winSaved) el.winSaved.hidden = false;
-                    },
-                    () => {},
-                );
+                const result = snapshotResult();
+                lastResult = result;
+                const generation = gameGeneration;
+                finishGameSession(result).then((outcome) => {
+                    if (generation !== gameGeneration) return;
+                    savedToAccount = Boolean(outcome.account);
+                    if (el.dialog.open && el.winSaved) el.winSaved.hidden = !savedToAccount;
+                }, () => {});
                 sounds.win();
                 vibrate([40, 60, 40, 60, 120]);
-                setTimeout(showWinDialog, 600);
+                later(() => showWinDialog(result), 600);
             } else {
                 sounds.match();
                 vibrate(30);
             }
         } else {
-            setTimeout(() => {
+            later(() => {
                 sounds.miss();
                 if (playerCount === 2) {
                     currentPlayer = 1 - currentPlayer;
@@ -444,7 +499,7 @@ if (app) {
         if (card.isMatched) {
             button.setAttribute('aria-disabled', 'true');
             // Let the flip finish before fading the matched pair.
-            setTimeout(() => button.classList.add('card--matched'), 600);
+            later(() => button.classList.add('card--matched'), 600);
         }
     }
 
@@ -527,29 +582,48 @@ if (app) {
     }
 
     function newGame() {
+        const active = document.activeElement;
+        const restoreFocus = el.dialog.open || el.board.contains(active) || active === document.body || active === null;
         if (el.dialog.open) el.dialog.close();
+        if (el.dailyNotice) el.dailyNotice.hidden = true;
         initializeGame();
         render();
+        if (restoreFocus) el.board.querySelector('.card[tabindex="0"]')?.focus();
+    }
+
+    /** Everything the end-of-game screens need, frozen at the moment of the win. */
+    function snapshotResult() {
+        return {
+            moves,
+            seconds: Math.max(elapsed, 1),
+            stars: starsFor(moves, level().pairs),
+            difficulty,
+            label: level().label,
+            pairs: level().pairs,
+            mode,
+            today,
+            players: playerCount,
+            playerScores: [...playerScores],
+        };
     }
 
     // --- Win dialog, confetti, share ------------------------------------
 
-    function showWinDialog() {
-        const result = { moves, seconds: Math.max(elapsed, 1), stars: starsFor(moves, level().pairs) };
-        lastResult = result;
-
-        if (playerCount === 2) {
+    function showWinDialog(result) {
+        if (result.players === 2) {
             showTwoPlayerResult(result);
             return;
         }
 
-        const record = isBetter(result, readBest());
+        const key = bestKey(result);
+        // A real game takes at least one turn per pair; never store less.
+        const record = result.moves >= result.pairs && isBetter(result, readBest(key));
         if (record) {
-            writeStorage(bestKey(), JSON.stringify(result));
+            writeStorage(key, JSON.stringify({ moves: result.moves, seconds: result.seconds, stars: result.stars }));
             renderBest();
         }
-        if (mode === 'daily') {
-            recordDailyWin();
+        if (result.mode === 'daily') {
+            recordDailyWin(result.today);
             renderStreak();
         }
 
@@ -562,18 +636,39 @@ if (app) {
             }),
         );
         el.winStars.setAttribute('aria-label', `${result.stars} of 3 stars`);
-        el.winSummary.textContent = `${modeLabel()} · ${level().label} · ${moves} turns in ${formatTime(result.seconds)}`;
+        el.winSummary.textContent = `${result.mode === 'daily' ? 'Daily challenge' : 'Free play'} · ${result.label} · ${result.moves} turns in ${formatTime(result.seconds)}`;
         el.winRecord.hidden = !record;
-        if (el.winSaved) el.winSaved.hidden = !(accountName && finishRequest);
+        if (el.winSaved) el.winSaved.hidden = !savedToAccount;
         el.scoreError.hidden = true;
         el.scoreForm.hidden = false;
         el.submitScore.disabled = false;
         el.share.textContent = 'Share result';
-        el.playerName.value = accountName ?? (readStorage('player') || '');
+        renderScoreForm();
 
         openDialog();
-        (accountName ? el.submitScore : el.playerName).focus();
+        (el.playerName.hidden ? el.submitScore : el.playerName).focus();
         launchConfetti();
+    }
+
+    /**
+     * The page was rendered for a signed-in player, but the server started
+     * this game as a guest: the session has ended since the page loaded.
+     */
+    function signedOutSinceLoad() {
+        return Boolean(accountName) && startResult !== null && !startResult.account;
+    }
+
+    function renderScoreForm({ prefill = true } = {}) {
+        const asAccount = Boolean(accountName) && !signedOutSinceLoad();
+        el.playerName.hidden = asAccount;
+        el.playerName.required = !asAccount;
+        if (prefill) el.playerName.value = asAccount ? accountName : (accountName ?? (readStorage('player') || ''));
+        if (el.scoreLabel) {
+            el.scoreLabel.textContent = asAccount
+                ? `Add this game to the top scores as ${accountName}`
+                : 'Add your score to the top scores';
+        }
+        if (el.signedOut) el.signedOut.hidden = asAccount || !accountName;
     }
 
     function openDialog() {
@@ -585,14 +680,16 @@ if (app) {
     }
 
     function showTwoPlayerResult(result) {
-        const [p1, p2] = playerScores;
+        const [p1, p2] = result.playerScores;
         const winner = p1 === p2 ? null : p1 > p2 ? 1 : 2;
         renderPlayers();
 
         el.winStars.replaceChildren();
         el.winStars.setAttribute('aria-label', '');
-        el.winSummary.textContent = `${winner ? `Player ${winner} wins!` : "It's a tie!"} ${p1} – ${p2} pairs · ${level().label} · ${moves} turns in ${formatTime(result.seconds)}`;
+        el.winSummary.textContent = `${winner ? `Player ${winner} wins!` : "It's a tie!"} ${p1} – ${p2} pairs · ${result.label} · ${result.moves} turns in ${formatTime(result.seconds)}`;
         el.winRecord.hidden = true;
+        if (el.winSaved) el.winSaved.hidden = true;
+        if (el.signedOut) el.signedOut.hidden = true;
         el.scoreForm.hidden = true;
         el.scoreError.hidden = true;
         el.share.textContent = 'Share result';
@@ -621,14 +718,15 @@ if (app) {
     }
 
     function shareText() {
-        const board = mode === 'daily' ? `Daily challenge ${today}` : 'Free play';
-        if (playerCount === 2) {
-            const [p1, p2] = playerScores;
+        const result = lastResult;
+        const board = result.mode === 'daily' ? `Daily challenge ${result.today}` : 'Free play';
+        if (result.players === 2) {
+            const [p1, p2] = result.playerScores;
             const outcome = p1 === p2 ? "It's a tie" : `Player ${p1 > p2 ? 1 : 2} wins`;
-            return `${gameTitle} · 2 players · ${level().label}\n${outcome} ${p1} – ${p2}\n${window.location.href}`;
+            return `${gameTitle} · 2 players · ${result.label}\n${outcome} ${p1} – ${p2}\n${window.location.href}`;
         }
-        const stars = '⭐'.repeat(lastResult.stars) + '☆'.repeat(3 - lastResult.stars);
-        return `${gameTitle} · ${board} · ${level().label}\n${stars} ${lastResult.moves} turns in ${formatTime(lastResult.seconds)}\n${window.location.href}`;
+        const stars = '⭐'.repeat(result.stars) + '☆'.repeat(3 - result.stars);
+        return `${gameTitle} · ${board} · ${result.label}\n${stars} ${result.moves} turns in ${formatTime(result.seconds)}\n${window.location.href}`;
     }
 
     async function shareResult() {
@@ -649,46 +747,70 @@ if (app) {
 
     // --- Scores ----------------------------------------------------------
 
+    /** The recorded game, retrying the finish once if it failed for a passing reason. */
+    async function recordedGame() {
+        if (!finishRequest) throw requestError(0, null);
+        try {
+            return await finishRequest;
+        } catch (error) {
+            // Retrying only makes sense if the server saw the game start;
+            // a fresh start would record a time of a few seconds.
+            if (error.retryable && startResult && lastResult) {
+                return finishGameSession(lastResult);
+            }
+            throw error;
+        }
+    }
+
     async function submitScore(event) {
         event.preventDefault();
         el.scoreError.hidden = true;
         el.submitScore.disabled = true;
 
         try {
-            let token = null;
-            try {
-                token = await (finishRequest ?? Promise.reject(new Error('not finished')));
-            } catch {
-                token = null;
-            }
-            if (!token) {
-                throw new Error('Could not reach the server to record this game, so the score cannot be saved.');
-            }
-
-            const payload = { game: token, player_name: accountName ?? el.playerName.value.trim() };
-            const response = await postJson(storeUrl, payload);
-
-            const body = await response.json().catch(() => ({}));
-
-            if (!response.ok) {
-                const first = body.errors ? Object.values(body.errors).flat()[0] : null;
-                throw new Error(first || body.message || 'Could not save your score.');
+            const game = await recordedGame();
+            renderScoreForm({ prefill: false }); // the start response may have arrived since the dialog opened
+            const asAccount = Boolean(game.account);
+            const name = el.playerName.value.trim();
+            if (!asAccount && !name) {
+                el.playerName.hidden = false;
+                el.playerName.focus();
+                throw new Error('Enter a name for the top scores.');
             }
 
-            if (!accountName) writeStorage('player', payload.player_name);
+            const response = await postJson(storeUrl, { game: game.token, player_name: asAccount ? game.account : name });
+            const body = await readJson(response);
+            if (!response.ok) throw requestError(response.status, body);
+
+            if (!asAccount) writeStorage('player', name);
             lastSubmittedId = body.data?.id ?? null;
             el.scoreForm.hidden = true;
             el.winSummary.textContent += body.rank ? ` · ranked #${body.rank}` : '';
             await loadLeaderboard();
             el.playAgain.focus();
         } catch (error) {
-            el.scoreError.textContent = error.message;
+            el.scoreError.textContent = error.message || CONNECTIVITY_MESSAGE;
             el.scoreError.hidden = false;
             el.submitScore.disabled = false;
         }
     }
 
+    let leaderboardSeq = 0;
+
+    /** The server says a different day has started than the one this page was dealt for. */
+    function adoptServerDate(playedOn) {
+        if (!dailyDateChanged(today, playedOn)) return;
+        today = playedOn;
+        if (mode !== 'daily') return;
+        if (moves === 0 && flipped.length === 0) {
+            newGame(); // nothing played yet: deal today's board straight away
+        } else if (el.dailyNotice) {
+            el.dailyNotice.hidden = false;
+        }
+    }
+
     async function loadLeaderboard() {
+        const seq = ++leaderboardSeq;
         el.leaderboardTitle.textContent = mode === 'daily'
             ? `Today's top scores · ${level().label}`
             : `Top scores · ${level().label}`;
@@ -700,10 +822,14 @@ if (app) {
 
         try {
             const response = await fetch(`${scoresUrl}?${params}`, { headers: { Accept: 'application/json' } });
+            if (seq !== leaderboardSeq) return;
             if (!response.ok) throw new Error('bad response');
-            const { data } = await response.json();
+            const { data, played_on: playedOn } = await response.json();
+            if (seq !== leaderboardSeq) return;
             renderLeaderboard(data);
+            if (mode === 'daily') adoptServerDate(playedOn);
         } catch {
+            if (seq !== leaderboardSeq) return;
             el.leaderboard.replaceChildren();
             el.leaderboardError.hidden = false;
         }

@@ -67,6 +67,7 @@
                     Everyone gets the same board today. Beat the clock and the leaderboard.
                     <span id="streak" class="game__streak" hidden></span>
                 </p>
+                <p id="dailyNotice" class="game__hint game__hint--alert" role="status" hidden>A new daily challenge is ready. Press New Game to play it.</p>
 
                 <div id="playersBar" class="players" role="status" hidden>
                     <div class="players__card" data-player="0">
@@ -128,7 +129,7 @@
             </p>
 
             <form id="scoreForm" class="win__form" method="dialog">
-                <label for="playerName" class="win__label">
+                <label for="playerName" id="scoreLabel" class="win__label">
                     @if ($playerName)
                         Add this game to the top scores as {{ $playerName }}
                     @else
@@ -139,6 +140,7 @@
                     <input id="playerName" name="player_name" type="text" maxlength="24" placeholder="Your name" autocomplete="nickname" @if ($playerName) hidden value="{{ $playerName }}" @else required @endif>
                     <button type="submit" id="submitScore" class="game__button">Submit</button>
                 </div>
+                <p id="signedOutNotice" class="win__error" hidden>You were signed out, so this game was not saved to your account. Log in again to keep future games.</p>
                 <p id="scoreError" class="win__error" role="alert" hidden></p>
             </form>
 

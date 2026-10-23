@@ -3,6 +3,7 @@ import { dealBoard, hashString, seededRandom, shuffle } from '../../resources/js
 import { formatTime, isBetter, starsFor } from '../../resources/js/game/scoring.js';
 import { currentStreak, nextStreak, yesterdayOf } from '../../resources/js/game/streak.js';
 import { nextIndex } from '../../resources/js/game/grid.js';
+import { CONNECTIVITY_MESSAGE, dailyDateChanged, firstErrorMessage, requestError } from '../../resources/js/game/session.js';
 
 const icons = Array.from({ length: 12 }, (_, i) => ({ id: i + 1, icon: '•', name: `Card ${i + 1}` }));
 
@@ -108,5 +109,30 @@ describe('grid navigation', () => {
         expect(nextIndex(5, 'Home', 4, 10)).toBe(0);
         expect(nextIndex(5, 'End', 4, 10)).toBe(9);
         expect(nextIndex(5, 'Enter', 4, 10)).toBeNull();
+    });
+});
+
+describe('game session helpers', () => {
+    it('notices only a real change of daily date', () => {
+        expect(dailyDateChanged('2026-10-22', '2026-10-22')).toBe(false);
+        expect(dailyDateChanged('2026-10-22', '2026-10-23')).toBe(true);
+        expect(dailyDateChanged('2026-10-22', null)).toBe(false);
+    });
+
+    it('reads the first validation message', () => {
+        expect(firstErrorMessage({ errors: { turns: ['Turns must be at least 8.'] } })).toBe('Turns must be at least 8.');
+        expect(firstErrorMessage({ message: 'Too Many Attempts.' })).toBe('Too Many Attempts.');
+        expect(firstErrorMessage(null)).toBeNull();
+    });
+
+    it('keeps the server explanation for 422 and marks other failures retryable', () => {
+        const rejected = requestError(422, { errors: { date: ['A new daily challenge has started. Reload to play it.'] } });
+        expect(rejected.message).toBe('A new daily challenge has started. Reload to play it.');
+        expect(rejected.retryable).toBe(false);
+        expect(rejected.errors.date).toBeDefined();
+
+        const outage = requestError(500, {});
+        expect(outage.message).toBe(CONNECTIVITY_MESSAGE);
+        expect(outage.retryable).toBe(true);
     });
 });

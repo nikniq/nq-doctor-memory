@@ -70,7 +70,8 @@ async function solve(page, { miss = false } = {}) {
         await page.click(`.card[data-card-id="${other}"]`);
         await page.waitForTimeout(1100);
     }
-    const done = new Set();
+    // Cards already matched (aria-disabled) are skipped.
+    const done = new Set(await page.$$eval('.card', (cards) => cards.flatMap((c, i) => (c.getAttribute('aria-disabled') === 'true' ? [i] : []))));
     for (let i = 0; i < names.length; i++) {
         if (done.has(i)) continue;
         const j = names.findIndex((n, k) => k !== i && n === names[i]);
@@ -90,7 +91,12 @@ try {
     const page = await context.newPage();
     const errors = [];
     page.on('pageerror', (e) => errors.push(e.message));
-    page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
+    let forcedFailure = false; // set while a test deliberately makes the server fail
+    page.on('console', (m) => {
+        if (m.type() !== 'error') return;
+        if (forcedFailure && m.text().includes('status of 500')) return;
+        errors.push(m.text());
+    });
 
     await page.goto(BASE);
     check((await page.$$('#difficulty option')).length === 6, 'six grid sizes offered');
@@ -158,6 +164,90 @@ try {
     await page.focus('.card[data-card-id="0"]');
     await page.keyboard.press('Enter');
     check(await page.$eval('.card[data-card-id="0"]', (c) => c.classList.contains('card--flipped')), 'enter flips the focused card');
+
+    // --- Races found in review ------------------------------------------
+    await page.selectOption('#players', '1');
+    await page.selectOption('#difficulty', '4x3');
+
+    const names = () => page.$$eval('.card', (cards) => cards.map((c) => c.querySelector('.card__name').textContent));
+    const missPair = async () => {
+        const n = await names();
+        const other = n.findIndex((x) => x !== n[0]);
+        await page.click('.card[data-card-id="0"]');
+        await page.click(`.card[data-card-id="${other}"]`);
+    };
+
+    // (a) Miss, New Game, flip within 0.9 s: the board must still be winnable.
+    await page.click('#resetBtn');
+    await missPair();
+    await page.click('#resetBtn');
+    await page.click('.card[data-card-id="3"]');
+    await page.waitForTimeout(1100);
+    {
+        const n = await names();
+        const twin = n.findIndex((x, k) => k !== 3 && x === n[3]);
+        await page.click(`.card[data-card-id="${twin}"]`);
+    }
+    await solve(page);
+    await page.waitForSelector('#winDialog[open]', { timeout: 3000 }).catch(() => {});
+    check(await page.textContent('#pairsCount') === '6' && Boolean(await page.$('#winDialog[open]')), 'old miss timer cannot freeze a new board');
+    await page.click('#playAgainBtn');
+    // (f) Focus returns to the board after Play Again.
+    check(await page.evaluate(() => document.activeElement?.matches('.card[data-card-id="0"]')), 'focus returns to the first card after Play Again');
+
+    // (b) Two players: a miss followed by New Game keeps Player 1 on turn.
+    await page.selectOption('#players', '2');
+    await missPair();
+    await page.click('#resetBtn');
+    await page.waitForTimeout(1200);
+    check(await page.getAttribute('.players__card--active', 'data-player') === '0', 'old miss timer cannot pass the turn on a new board');
+    await page.selectOption('#players', '1');
+
+    // (c) Win, then New Game before the dialog: no dialog and no 0-turn best.
+    await page.evaluate(() => localStorage.clear());
+    await solve(page);
+    await page.click('#resetBtn');
+    await page.waitForTimeout(900);
+    const zeroBest = await page.evaluate(() => Object.keys(localStorage).filter((k) => k.includes('best')).map((k) => JSON.parse(localStorage.getItem(k)).moves));
+    check(!(await page.$('#winDialog[open]')) && !zeroBest.includes(0), 'a cancelled win neither opens the dialog nor saves a 0-turn best');
+
+    // (g) The fact toast leaves as soon as the next turn starts.
+    {
+        const n = await names();
+        const j = n.findIndex((x, k) => k > 0 && x === n[0]);
+        await page.click('.card[data-card-id="0"]');
+        await page.click(`.card[data-card-id="${j}"]`);
+        await page.waitForSelector('#fact:not([hidden])');
+        const next = n.findIndex((x, k) => k !== 0 && k !== j);
+        await page.click(`.card[data-card-id="${next}"]`);
+        await page.waitForTimeout(450);
+        check(await page.isHidden('#fact'), 'fact toast hides when the next turn starts');
+        await page.click('#resetBtn');
+    }
+
+    // (d) A failed finish never claims the game was saved and explains why.
+    forcedFailure = true;
+    await page.route('**/games/*/finish', (route) => route.fulfill({ status: 500, body: '{}' }));
+    await solve(page);
+    await page.waitForSelector('#winDialog[open]', { timeout: 3000 });
+    await page.fill('#playerName', 'Retry');
+    await page.click('#submitScore');
+    await page.waitForSelector('#scoreError:not([hidden])', { timeout: 3000 });
+    check(await page.isHidden('#winSaved') && (await page.textContent('#scoreError')).includes('Could not reach the server'), 'failed finish shows an error and no "saved" claim');
+    await page.unroute('**/games/*/finish');
+    forcedFailure = false;
+    await page.click('#playAgainBtn');
+
+    // (e) A slow response for the previous grid cannot overwrite the current list.
+    await page.route('**/scores?difficulty=6x6*', async (route) => {
+        await new Promise((r) => setTimeout(r, 1200));
+        await route.continue();
+    });
+    await page.selectOption('#difficulty', '6x6');
+    await page.selectOption('#difficulty', '4x3');
+    await page.waitForTimeout(1600);
+    check((await page.textContent('#leaderboardTitle')).includes('4 × 3') && (await page.$$('.leaderboard__row')).length > 0, 'leaderboard shows the grid that is selected now');
+    await page.unroute('**/scores?difficulty=6x6*');
 
     // Phone width.
     const phone = await browser.newPage({ viewport: { width: 375, height: 800 } });
