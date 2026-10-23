@@ -4,6 +4,7 @@ import { formatTime, isBetter, nextGrid, starsFor, starTarget } from '../../reso
 import { currentStreak, nextStreak, yesterdayOf } from '../../resources/js/game/streak.js';
 import { nextIndex } from '../../resources/js/game/grid.js';
 import { formatCountdown, msUntil } from '../../resources/js/game/daily.js';
+import { shareText, shareUrl } from '../../resources/js/game/share.js';
 import { cardLabel, positionOf, turnMessage, winMessage } from '../../resources/js/game/announce.js';
 import { CONNECTIVITY_MESSAGE, dailyDateChanged, firstErrorMessage, requestError } from '../../resources/js/game/session.js';
 
@@ -219,5 +220,20 @@ describe('star targets', () => {
     it('still accepts a pair count', () => {
         expect(starsFor(12, 8)).toBe(3);
         expect(starsFor(18, 8)).toBe(2);
+    });
+});
+
+describe('sharing', () => {
+    it('links to the same mode and grid', () => {
+        expect(shareUrl('https://doctor.example/', { mode: 'daily', grid: '6x6' })).toBe('https://doctor.example/?mode=daily&grid=6x6');
+        expect(shareUrl('https://doctor.example', {})).toBe('https://doctor.example/');
+    });
+
+    it('summarises solo and two-player games', () => {
+        const url = 'https://doctor.example/?mode=daily&grid=4x4';
+        expect(shareText({ players: 1, mode: 'daily', today: '2026-10-23', label: '4 × 4', stars: 2, moves: 15, seconds: 75 }, { title: 'Doctor Memory Game', url }))
+            .toBe(`Doctor Memory Game · Daily challenge 2026-10-23 · 4 × 4\n⭐⭐☆ 15 turns in 1:15\n${url}`);
+        expect(shareText({ players: 2, playerScores: [5, 3], label: '4 × 4' }, { title: 'Doctor Memory Game', url }))
+            .toBe(`Doctor Memory Game · 2 players · 4 × 4\nPlayer 1 wins 5 – 3\n${url}`);
     });
 });

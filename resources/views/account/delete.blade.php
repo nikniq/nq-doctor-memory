@@ -1,4 +1,4 @@
-@extends('layouts.app', ['pageTitle' => 'Delete your account'])
+@extends('layouts.app', ['pageTitle' => 'Delete your account', 'noindex' => true])
 
 @section('content')
     <x-auth-card title="Delete your account?">

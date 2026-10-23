@@ -15,6 +15,8 @@
         data-finish-url="{{ route('games.finish', ['game' => '__GAME__']) }}"
         data-player-name="{{ $playerName }}"
         data-daily-played='@json($dailyPlayed)'
+        data-initial-mode="{{ $initialMode }}"
+        data-initial-grid="{{ $initialGrid }}"
         data-scores-url="{{ route('scores.index') }}"
         data-store-url="{{ route('scores.store') }}"
     >

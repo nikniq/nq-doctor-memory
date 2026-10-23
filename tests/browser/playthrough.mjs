@@ -343,6 +343,19 @@ try {
         await laptop.close();
     }
 
+    // A shared link opens the shared board, then leaves the address clean.
+    {
+        const shared = await browser.newPage();
+        await shared.goto(`${BASE}/?mode=daily&grid=4x3`);
+        const state = await shared.evaluate(() => ({
+            grid: document.getElementById('difficulty').value,
+            daily: document.querySelector('.game__mode[data-mode="daily"]').getAttribute('aria-pressed'),
+            search: window.location.search,
+        }));
+        check(state.grid === '4x3' && state.daily === 'true' && state.search === '', 'a shared link opens daily 4 × 3');
+        await shared.close();
+    }
+
     // Phone focus mode: once play starts, the whole board and the turn count fit on screen.
     for (const viewport of [{ width: 390, height: 844 }, { width: 375, height: 667 }]) {
         const small = await browser.newPage({ viewport });

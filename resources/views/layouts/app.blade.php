@@ -6,6 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>{{ isset($pageTitle) ? $pageTitle.' · ' : '' }}{{ config('game.title') }}</title>
+    @include('partials.meta')
 
     {{-- Never on pages whose URLs carry tokens or personal data. --}}
     @if (($gaId = config('services.google_analytics.measurement_id')) && ! request()->routeIs('password.reset', 'password.request', 'login', 'register', 'verification.*'))

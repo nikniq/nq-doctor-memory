@@ -1,4 +1,4 @@
-@extends('layouts.app', ['pageTitle' => 'Reset password'])
+@extends('layouts.app', ['pageTitle' => 'Reset password', 'noindex' => true])
 
 @section('content')
     <x-auth-card title="Reset your password" intro="Enter your email and we'll send you a link to choose a new password. This also works if you signed up with Google and want a password too.">

@@ -1,4 +1,4 @@
-@extends('layouts.app', ['pageTitle' => 'Your games'])
+@extends('layouts.app', ['pageTitle' => 'Your games', 'noindex' => true])
 
 @section('content')
     <main class="page">

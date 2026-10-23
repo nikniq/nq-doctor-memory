@@ -1,4 +1,4 @@
-@extends('layouts.app', ['pageTitle' => 'Settings'])
+@extends('layouts.app', ['pageTitle' => 'Settings', 'noindex' => true])
 
 @section('content')
     <main class="page page--narrow">

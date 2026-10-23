@@ -1,4 +1,4 @@
-@extends('layouts.app', ['pageTitle' => 'Verify your email'])
+@extends('layouts.app', ['pageTitle' => 'Verify your email', 'noindex' => true])
 
 @section('content')
     <x-auth-card title="Check your inbox">

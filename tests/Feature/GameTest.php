@@ -75,4 +75,40 @@ class GameTest extends TestCase
         preg_match("/data-difficulties='([^']*)'/", $html, $match);
         $this->assertSame($settings['stars'][3], json_decode(html_entity_decode($match[1]), true)[$grid]['stars'][3]);
     }
+
+    public function test_the_game_page_has_link_preview_metadata(): void
+    {
+        $html = $this->get('/?utm=x')->getContent();
+
+        $this->assertStringContainsString('<meta property="og:title" content="Doctor Memory Game">', $html);
+        $this->assertMatchesRegularExpression('#<meta property="og:image" content="https?://[^"]+/images/og-image\.png\?v=1">#', $html);
+        $this->assertStringContainsString('<link rel="canonical" href="'.url('/').'">', $html);
+        $this->assertStringContainsString('<meta name="theme-color" content="'.config('game.colors.background').'">', $html);
+        $this->assertStringNotContainsString('noindex', $html);
+    }
+
+    public function test_shared_links_open_the_shared_board(): void
+    {
+        $this->get('/?mode=daily&grid=6x6')
+            ->assertSee('data-initial-mode="daily"', false)
+            ->assertSee('data-initial-grid="6x6"', false)
+            ->assertSee("Today's 6 × 6 daily challenge");
+
+        $this->get('/?grid=bogus&mode=nope')
+            ->assertOk()
+            ->assertSee('data-initial-grid=""', false)
+            ->assertSee('data-initial-mode=""', false);
+    }
+
+    public function test_account_pages_stay_out_of_search_results(): void
+    {
+        $this->get('/login')->assertSee('<meta name="robots" content="noindex">', false);
+    }
+
+    public function test_the_icons_and_preview_image_exist(): void
+    {
+        $this->assertGreaterThan(0, filesize(public_path('favicon.ico')));
+        $this->assertSame([1200, 630], array_slice(getimagesize(public_path('images/og-image.png')), 0, 2));
+        $this->assertSame([180, 180], array_slice(getimagesize(public_path('images/apple-touch-icon.png')), 0, 2));
+    }
 }

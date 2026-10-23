@@ -1,4 +1,4 @@
-@extends('layouts.app', ['pageTitle' => 'Register'])
+@extends('layouts.app', ['pageTitle' => 'Register', 'noindex' => true])
 
 @section('content')
     <x-auth-card title="Create an account" intro="Save every game you finish, track your turns and appear in the player rankings.">

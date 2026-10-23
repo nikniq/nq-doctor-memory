@@ -1,4 +1,4 @@
-@extends('layouts.app', ['pageTitle' => 'Log in'])
+@extends('layouts.app', ['pageTitle' => 'Log in', 'noindex' => true])
 
 @section('content')
     <x-auth-card title="Log in">

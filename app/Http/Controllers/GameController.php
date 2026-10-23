@@ -28,6 +28,11 @@ class GameController extends Controller
             'gamesUrl' => route('games.store'),
             'playerName' => $user?->hasVerifiedEmail() ? $user->name : null,
             'dailyPlayed' => $this->dailyGridsStarted($request),
+            // Deep links (?mode=daily&grid=6x6) from shared results; bad values are ignored.
+            'initialMode' => in_array($request->query('mode'), ['daily', 'free'], true) ? $request->query('mode') : null,
+            'initialGrid' => is_string($request->query('grid')) && array_key_exists($request->query('grid'), config('game.difficulties'))
+                ? $request->query('grid')
+                : null,
         ]);
     }
 

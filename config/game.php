@@ -14,6 +14,8 @@ return [
 
     'title' => env('GAME_TITLE', 'Doctor Memory Game'),
 
+    'description' => env('GAME_DESCRIPTION', 'A free medical memory card game. Match stethoscopes, syringes and X-rays, learn a fact with every pair, and take on the daily challenge.'),
+
     'win_message' => env('GAME_WIN_MESSAGE', 'Congratulations! You found all pairs!'),
 
     'font_family' => env('GAME_FONT_FAMILY', 'Arial'),

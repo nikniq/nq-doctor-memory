@@ -19,6 +19,7 @@ import { nextIndex } from './game/grid.js';
 import { CONNECTIVITY_MESSAGE, dailyDateChanged, requestError } from './game/session.js';
 import { cardLabel, turnMessage, winMessage } from './game/announce.js';
 import { formatCountdown, msUntil } from './game/daily.js';
+import { shareText as summarise, shareUrl } from './game/share.js';
 
 const app = document.getElementById('app');
 
@@ -91,9 +92,18 @@ if (app) {
     };
 
     const defaultDifficulty = difficulties[app.dataset.defaultDifficulty] ? app.dataset.defaultDifficulty : Object.keys(difficulties)[0];
-    let difficulty = readStorage('difficulty');
+    // A shared link (?mode=…&grid=…) wins over what this browser last used.
+    const linkedGrid = difficulties[app.dataset.initialGrid] ? app.dataset.initialGrid : null;
+    const linkedMode = ['daily', 'free'].includes(app.dataset.initialMode) ? app.dataset.initialMode : null;
+    let difficulty = linkedGrid ?? readStorage('difficulty');
     if (!difficulties[difficulty]) difficulty = defaultDifficulty;
-    let mode = readStorage('mode') === 'daily' ? 'daily' : 'free';
+    let mode = linkedMode ?? (readStorage('mode') === 'daily' ? 'daily' : 'free');
+    if (linkedGrid) writeStorage('difficulty', linkedGrid);
+    if (linkedMode) writeStorage('mode', linkedMode);
+    if ((linkedGrid || linkedMode) && window.history?.replaceState) {
+        // Applied once; a reload should keep whatever the player picks next.
+        window.history.replaceState(null, '', window.location.pathname);
+    }
     let soundOn = readStorage('sound') !== 'off';
     let playerCount = readStorage('players') === '2' ? 2 : 1;
     let currentPlayer = 0;
@@ -895,14 +905,8 @@ if (app) {
 
     function shareText() {
         const result = lastResult;
-        const board = result.mode === 'daily' ? `Daily challenge ${result.today}` : 'Free play';
-        if (result.players === 2) {
-            const [p1, p2] = result.playerScores;
-            const outcome = p1 === p2 ? "It's a tie" : `Player ${p1 > p2 ? 1 : 2} wins`;
-            return `${gameTitle} · 2 players · ${result.label}\n${outcome} ${p1} – ${p2}\n${window.location.href}`;
-        }
-        const stars = '⭐'.repeat(result.stars) + '☆'.repeat(3 - result.stars);
-        return `${gameTitle} · ${board} · ${result.label}\n${stars} ${result.moves} turns in ${formatTime(result.seconds)}\n${window.location.href}`;
+        const url = shareUrl(window.location.origin, { mode: result.mode, grid: result.difficulty });
+        return summarise(result, { title: gameTitle, url });
     }
 
     async function shareResult() {
