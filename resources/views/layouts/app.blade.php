@@ -1,0 +1,44 @@
+@php($colors = config('game.colors'))
+<!doctype html>
+<html lang="{{ str_replace('_', '-', app()->getLocale()) }}" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <title>{{ isset($pageTitle) ? $pageTitle.' · ' : '' }}{{ config('game.title') }}</title>
+
+    @if ($gaId = config('services.google_analytics.measurement_id'))
+        <!-- Google tag (gtag.js) -->
+        <script async src="https://www.googletagmanager.com/gtag/js?id={{ $gaId }}"></script>
+        <script>
+            window.dataLayer = window.dataLayer || [];
+            function gtag(){dataLayer.push(arguments);}
+            gtag('js', new Date());
+            gtag('config', @js($gaId));
+        </script>
+    @endif
+
+    <style>
+        :root {
+            --game-bg: {{ $colors['background'] }};
+            --game-card-back: {{ $colors['card_back'] }};
+            --game-card-front: {{ $colors['card_front'] }};
+            --game-text: {{ $colors['text'] }};
+            --game-button: {{ $colors['button'] }};
+            --game-font: '{{ config('game.font_family') }}', Arial, sans-serif;
+            --game-font-size: {{ (int) config('game.font_size') }}px;
+        }
+    </style>
+
+    @vite(['resources/css/app.css', 'resources/js/game.js'])
+</head>
+<body class="site h-full m-0 p-0">
+    @include('partials.nav')
+
+    @if (session('status'))
+        <p class="flash" role="status">{{ session('status') }}</p>
+    @endif
+
+    @yield('content')
+</body>
+</html>

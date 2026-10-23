@@ -1,0 +1,33 @@
+#!/bin/bash
+#================================================================
+# Settings for cx.sh (the LOCAL deploy assistant). Copy and fill in:
+#
+#   cp vars.sh.example vars.sh
+#
+# vars.sh is gitignored because it names hosts and accounts.
+#================================================================
+
+# --- Server --------------------------------------------------------------
+PROJECT="nq-doctor-memory"              # used in banners and backup names
+REMOTE_USER="your-ssh-user"
+REMOTE_HOST="your-host.example.com"
+REMOTE="$REMOTE_USER@$REMOTE_HOST"
+REMOTE_PORT="18765"                     # SiteGround SSH is not on 22
+
+# App root on the server, relative to ~. deploy.sh, .env and storage/ live here.
+REMOTE_APP="www/your-domain.com"
+
+# Public URL, used by the health check.
+APP_URL="https://your-domain.com"
+
+# Git remote the server pulls from (used by first-time setup, option 90).
+REPO_URL="git@github.com:your-account/nq-doctor-memory.git"
+
+# --- Tooling -------------------------------------------------------------
+# Kept as variables so you can add flags once (e.g. -i ~/.ssh/key).
+APP_SSH="ssh -p $REMOTE_PORT"
+APP_SCP="scp -P $REMOTE_PORT"
+
+# --- Local paths ---------------------------------------------------------
+BACKUP_DIR="./backups"                  # where option 50 saves database copies
+LOG_DIR="./log"                         # cx.sh writes its history here
