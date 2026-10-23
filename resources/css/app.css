@@ -1271,3 +1271,31 @@
     margin-top: 0.5em;
     text-align: center;
 }
+
+.panel__subtitle {
+    margin: 1.5em 0 0.5em;
+    font-size: 1.05em;
+    font-weight: bold;
+}
+
+.btn--danger {
+    background-color: #b91c1c;
+    color: #fff;
+}
+
+.prose-list {
+    margin: 0;
+    padding-left: 1.25em;
+    display: grid;
+    gap: 0.5em;
+    line-height: 1.5;
+}
+
+.sitefoot {
+    display: flex;
+    justify-content: center;
+    gap: 1.5em;
+    padding: 1.5em 1em 2em;
+    font-size: 0.85em;
+    opacity: 0.8;
+}

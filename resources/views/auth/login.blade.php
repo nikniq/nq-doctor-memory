@@ -15,6 +15,8 @@
             <button type="submit" class="btn btn--primary">Log in</button>
         </form>
 
+        <p class="form__hint form__hint--center"><a href="{{ route('privacy') }}">How we use your data</a></p>
+
         <x-slot:footer>
             New here? <a href="{{ route('register') }}">Create an account</a>
         </x-slot:footer>

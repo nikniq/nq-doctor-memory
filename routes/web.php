@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AccountController;
+use App\Http\Controllers\AccountDataController;
 use App\Http\Controllers\AccountSettingsController;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\Auth\EmailVerificationController;
@@ -16,6 +17,7 @@ use Illuminate\Support\Facades\Route;
 
 Route::get('/', GameController::class)->name('game');
 Route::get('/leaderboard', LeaderboardController::class)->name('leaderboard');
+Route::view('/privacy', 'privacy')->name('privacy');
 
 Route::post('/games', [GameSessionController::class, 'store'])
     ->middleware('throttle:30,1,games')
@@ -59,6 +61,23 @@ Route::middleware('auth')->group(function () {
     Route::post('/email/verification-notification', [EmailVerificationController::class, 'resend'])
         ->middleware('throttle:verification-send')
         ->name('verification.send');
+
+    // Taking your data, or removing it, does not need a verified email.
+    Route::get('/account/export', [AccountDataController::class, 'export'])
+        ->middleware('throttle:3,10,export')
+        ->name('account.export');
+    Route::delete('/account', [AccountDataController::class, 'destroy'])
+        ->middleware('throttle:5,1,delete-account')
+        ->name('account.destroy');
+    Route::post('/account/delete-link', [AccountDataController::class, 'sendDeleteLink'])
+        ->middleware('throttle:verification-send')
+        ->name('account.delete-link');
+    Route::get('/account/delete/{user}', [AccountDataController::class, 'confirm'])
+        ->middleware('signed')
+        ->name('account.destroy.confirm');
+    Route::post('/account/delete/{user}', [AccountDataController::class, 'destroySigned'])
+        ->middleware(['signed', 'throttle:5,1,delete-account'])
+        ->name('account.destroy.signed');
 
     Route::middleware('verified')->group(function () {
         Route::get('/account', AccountController::class)->name('account');

@@ -42,5 +42,10 @@
     @endif
 
     @yield('content')
+
+    <footer class="sitefoot">
+        <a href="{{ route('privacy') }}">Privacy</a>
+        <a href="{{ route('leaderboard') }}">Rankings</a>
+    </footer>
 </body>
 </html>

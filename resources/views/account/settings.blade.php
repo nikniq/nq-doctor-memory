@@ -48,6 +48,34 @@
             </form>
         </section>
 
+        <section class="panel" aria-labelledby="dataTitle">
+            <h2 id="dataTitle" class="panel__title">Your data</h2>
+            <p class="panel__intro">Download everything we keep about you, or delete your account. <a href="{{ route('privacy') }}">How your data is used</a>.</p>
+
+            <p><a href="{{ route('account.export') }}" class="btn btn--primary" download>Download my data</a></p>
+
+            <h3 class="panel__subtitle">Delete my account</h3>
+            <p>This removes your account, every game and top score it recorded, and signs you out on every device. It cannot be undone.</p>
+
+            @if ($user->hasPassword())
+                <form method="POST" action="{{ route('account.destroy') }}" class="form">
+                    @csrf
+                    @method('DELETE')
+                    <x-field name="password" label="Your password, to confirm" type="password" autocomplete="current-password" required />
+                    <button type="submit" class="btn btn--danger">Delete my account</button>
+                </form>
+            @else
+                <form method="POST" action="{{ route('account.delete-link') }}" class="form">
+                    @csrf
+                    @error('password')
+                        <p class="field__error">{{ $message }}</p>
+                    @enderror
+                    <p class="form__hint">You sign in with Google, so we'll email you a link to confirm.</p>
+                    <button type="submit" class="btn btn--danger">Email me a confirmation link</button>
+                </form>
+            @endif
+        </section>
+
         <p class="panel__footer"><a href="{{ route('account') }}">Back to your games</a></p>
     </main>
 @endsection
