@@ -12,7 +12,7 @@ import { join } from 'node:path';
 import { chromium } from 'playwright';
 import { dealBoard, hashString, seededRandom } from '../../resources/js/game/random.js';
 
-const PORT = 8790;
+const PORT = Number(process.env.PLAYTHROUGH_PORT ?? 8790);
 const BASE = `http://127.0.0.1:${PORT}`;
 const shotsDir = process.env.SHOTS;
 const failures = [];
@@ -21,10 +21,20 @@ const failures = [];
 const workDir = mkdtempSync(join(tmpdir(), 'memory-playthrough-'));
 const dbPath = join(workDir, 'playthrough.sqlite');
 writeFileSync(dbPath, '');
-const env = { ...process.env, DB_CONNECTION: 'sqlite', DB_DATABASE: dbPath, MAIL_MAILER: 'log', APP_URL: BASE };
+// Mail goes to a log file of its own, whatever the developer's .env says.
+const mailLog = join(workDir, 'mail.log');
+const env = {
+    ...process.env,
+    DB_CONNECTION: 'sqlite',
+    DB_DATABASE: dbPath,
+    MAIL_MAILER: 'log',
+    MAIL_LOG_CHANNEL: 'single',
+    LOG_CHANNEL: 'single',
+    LOG_LEVEL: 'debug',
+    LOG_SINGLE_PATH: mailLog,
+    APP_URL: BASE,
+};
 execFileSync('php', ['artisan', 'migrate', '--force', '--no-interaction'], { env, stdio: 'ignore' });
-
-const mailLog = 'storage/logs/laravel.log';
 const logSize = () => {
     try {
         return statSync(mailLog).size;
@@ -48,11 +58,22 @@ function check(condition, message) {
     console.log(`${condition ? '✓' : '✗'} ${message}`);
 }
 
-async function waitForServer() {
+async function isServing() {
+    try {
+        return (await fetch(`${BASE}/up`)).ok;
+    } catch {
+        return false;
+    }
+}
+
+async function waitForServer(server) {
+    let exited = null;
+    server.once('exit', (code) => {
+        exited = code;
+    });
     for (let i = 0; i < 40; i++) {
-        try {
-            if ((await fetch(`${BASE}/up`)).ok) return;
-        } catch {}
+        if (exited !== null) throw new Error(`php artisan serve exited with code ${exited}`);
+        if (await isServing()) return;
         await new Promise((r) => setTimeout(r, 250));
     }
     throw new Error('server did not start');
@@ -104,11 +125,18 @@ async function solve(page, { miss = false } = {}) {
     }
 }
 
+// Something else on the port would be tested instead of this checkout.
+if (await isServing()) {
+    console.error(`Port ${PORT} is already serving an app. Stop it or set PLAYTHROUGH_PORT.`);
+    process.exit(1);
+}
+
 const server = spawn('php', ['artisan', 'serve', `--port=${PORT}`], { stdio: 'ignore', env });
-const browser = await chromium.launch();
+let browser;
 
 try {
-    await waitForServer();
+    await waitForServer(server);
+    browser = await chromium.launch();
     const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
     const page = await context.newPage();
     const errors = [];
@@ -360,7 +388,8 @@ try {
     check((await account.textContent('.leaderboard__row--mine')).includes(name), 'top score posted under the account name');
 
     await account.goto(`${BASE}/account`);
-    check((await account.textContent('.tiles')).includes('6'), 'account page shows turns taken');
+    const tile = (label) => account.textContent(`.tile:has(dt:text-is("${label}")) dd`).then((t) => t.trim());
+    check(await tile('Games finished') === '1' && await tile('Turns taken') === '6', 'account page shows exactly the game just played');
     await shot(account, 'account');
 
     await account.goto(`${BASE}/leaderboard?grid=4x3`);
@@ -372,7 +401,7 @@ try {
 
     check(errors.length === 0, `no console errors${errors.length ? `: ${errors.join(' | ')}` : ''}`);
 } finally {
-    await browser.close();
+    await browser?.close();
     server.kill();
     rmSync(workDir, { recursive: true, force: true });
 }

@@ -46,6 +46,12 @@ remote_tty() {
   $APP_SSH -t "$REMOTE" "cd ~/$REMOTE_APP && $*"
 }
 
+# The value from `php artisan config:show key`, which prints blank lines
+# around a "key .. value" line.
+config_value() {
+  awk 'NF{print $NF}' | tail -n1 | tr -d '\r\n'
+}
+
 banner() {
   echo ===========================================================
   echo "$1"
@@ -163,11 +169,9 @@ case "$SELECTION" in
   preflight_local
   echo "Local HEAD : $(git log --oneline -1)"
   if [ "$SELECTION" = "21" ]; then
-    remote_tty "./deploy.sh --down"
-    log_history "Deployed $PROJECT with maintenance mode: $(git log --oneline -1)"
+    remote_tty "./deploy.sh --down" && log_history "Deployed $PROJECT with maintenance mode: $(git log --oneline -1)"
   else
-    remote_tty "./deploy.sh"
-    log_history "Deployed $PROJECT: $(git log --oneline -1)"
+    remote_tty "./deploy.sh" && log_history "Deployed $PROJECT: $(git log --oneline -1)"
   fi
   ;;
 
@@ -261,23 +265,32 @@ case "$SELECTION" in
   banner "BACKUP: database"
   mkdir -p "$BACKUP_DIR"
   STAMP=$(date '+%Y%m%d-%H%M')
-  DRIVER=$(remote "php artisan config:show database.default" 2>/dev/null | awk '{print $NF}' | tr -d '\r')
+  DRIVER=$(remote "php artisan config:show database.default" 2>/dev/null | config_value)
   echo "Database driver: $DRIVER"
   case "$DRIVER" in
     sqlite)
       FILE="$BACKUP_DIR/$PROJECT-$STAMP.sqlite"
-      $APP_SCP "$REMOTE:~/$REMOTE_APP/database/database.sqlite" "$FILE"
+      $APP_SCP "$REMOTE:~/$REMOTE_APP/database/database.sqlite" "$FILE" || { rm -f "$FILE"; echo '✗ backup failed'; exit 1; }
+      if command -v sqlite3 >/dev/null 2>&1 && [ "$(sqlite3 "$FILE" 'pragma integrity_check' 2>&1)" != "ok" ]; then
+        rm -f "$FILE"; echo '✗ the copied database failed its integrity check'; exit 1
+      fi
       ;;
     mysql|mariadb)
       FILE="$BACKUP_DIR/$PROJECT-$STAMP.sql.gz"
       # Credentials are read on the server and passed through the
       # environment, so they never appear in the process list or locally.
-      $APP_SSH "$REMOTE" "cd ~/$REMOTE_APP && \
-        DB_NAME=\$(php artisan config:show database.connections.$DRIVER.database | awk '{print \$NF}') && \
-        DB_USER=\$(php artisan config:show database.connections.$DRIVER.username | awk '{print \$NF}') && \
-        DB_HOST=\$(php artisan config:show database.connections.$DRIVER.host | awk '{print \$NF}') && \
+      # pipefail on the server: a failed mysqldump must fail the pipeline,
+      # not leave gzip's 20-byte empty archive looking like a backup.
+      $APP_SSH "$REMOTE" "set -o pipefail; cd ~/$REMOTE_APP && \
+        DB_NAME=\$(php artisan config:show database.connections.$DRIVER.database | awk 'NF{print \$NF}' | tail -n1) && \
+        DB_USER=\$(php artisan config:show database.connections.$DRIVER.username | awk 'NF{print \$NF}' | tail -n1) && \
+        DB_HOST=\$(php artisan config:show database.connections.$DRIVER.host | awk 'NF{print \$NF}' | tail -n1) && \
         MYSQL_PWD=\$(php -r 'require \"vendor/autoload.php\"; \$a = require \"bootstrap/app.php\"; \$a->make(Illuminate\\Contracts\\Console\\Kernel::class)->bootstrap(); echo config(\"database.connections.$DRIVER.password\");') \
-        mysqldump --no-tablespaces --single-transaction -h \"\$DB_HOST\" -u \"\$DB_USER\" \"\$DB_NAME\" | gzip" > "$FILE"
+        mysqldump --no-tablespaces --single-transaction -h \"\$DB_HOST\" -u \"\$DB_USER\" \"\$DB_NAME\" | gzip" > "$FILE" \
+        || { rm -f "$FILE"; echo '✗ backup failed'; exit 1; }
+      if ! gzip -t "$FILE" 2>/dev/null || ! gzip -dc "$FILE" | tail -n1 | grep -q 'Dump completed'; then
+        rm -f "$FILE"; echo '✗ the dump is incomplete'; exit 1
+      fi
       ;;
     *)
       echo "✗ Backup for '$DRIVER' is not supported by this script."
@@ -317,16 +330,28 @@ case "$SELECTION" in
   confirm "Clones $REPO_URL into ~/$REMOTE_APP if it is not there, installs dependencies and creates .env."
   $APP_SSH -t "$REMOTE" "
     set -e
-    if [ ! -d ~/$REMOTE_APP/.git ]; then
-      git clone '$REPO_URL' ~/$REMOTE_APP
-    fi
+    mkdir -p ~/$REMOTE_APP
     cd ~/$REMOTE_APP
+    if [ ! -d .git ]; then
+      # Shared hosts (e.g. SiteGround) pre-create the site folder with a
+      # placeholder public_html, so clone in place rather than into it.
+      if [ -d public_html ]; then
+        MOVED=public_html.host-default.\$(date +%s)
+        mv public_html \"\$MOVED\"
+        echo \"→ moved the host's placeholder public_html to \$MOVED\"
+      fi
+      git init -q
+      git remote add origin '$REPO_URL'
+      git fetch -q origin
+      git checkout -f -B main origin/main
+    fi
     composer install --no-dev --optimize-autoloader --no-interaction
     if [ ! -f .env ]; then
       cp .env.example .env
       sed -i 's/^APP_ENV=.*/APP_ENV=production/; s/^APP_DEBUG=.*/APP_DEBUG=false/' .env
       echo '→ created .env from .env.example'
     fi
+    grep -qE '^SESSION_SECURE_COOKIE=true' .env || { sed -i '/^SESSION_SECURE_COOKIE=/d' .env; echo 'SESSION_SECURE_COOKIE=true' >> .env; }
     grep -qE '^APP_KEY=base64:.+' .env || php artisan key:generate --force
     if grep -qE '^DB_CONNECTION=sqlite' .env && [ ! -f database/database.sqlite ]; then
       touch database/database.sqlite
@@ -335,7 +360,7 @@ case "$SELECTION" in
     echo
     echo 'Next on the server:'
     echo '  1. Edit .env: APP_URL, database, MAIL_* (verification emails), GOOGLE_CLIENT_ID/SECRET'
-    echo '  2. Point the domain at ~/$REMOTE_APP/public_html'
+    echo '  2. Point the domain at ~/$REMOTE_APP/public_html (the host placeholder, if any, was renamed public_html.host-default.*)'
     echo '  3. Add the scheduler to cron:'
     echo \"     * * * * * cd ~/$REMOTE_APP && php artisan schedule:run >> /dev/null 2>&1\"
     echo '  4. Run ./deploy.sh (or option 20 from here)'

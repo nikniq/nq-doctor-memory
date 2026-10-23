@@ -30,10 +30,13 @@ warn() { echo "⚠ $1"; }
 #---------------------------------------------------------------
 echo "→ preflight"
 command -v php >/dev/null 2>&1 || fail "php is not on PATH"
+php -r 'exit(PHP_VERSION_ID >= 80401 ? 0 : 1);' || fail "php $(php -r 'echo PHP_VERSION;') is too old (the locked packages need 8.4.1+)"
 [ -f .env ] || fail ".env is missing — copy .env.example to .env and fill it in"
 grep -qE '^APP_KEY=base64:.+' .env || fail "APP_KEY is empty — run: php artisan key:generate"
 grep -qE '^APP_ENV=production' .env || warn "APP_ENV is not 'production' in .env"
 grep -qE '^APP_DEBUG=false' .env || warn "APP_DEBUG is not 'false' in .env — error pages will leak details"
+grep -qE '^MAIL_MAILER=(log|array)' .env && warn "MAIL_MAILER is log/array — verification and password-reset emails will not be sent"
+grep -qE '^SESSION_SECURE_COOKIE=true' .env || warn "SESSION_SECURE_COOKIE is not true — session cookies can travel over plain http"
 [ -f public_html/build/manifest.json ] || fail "public_html/build/manifest.json is missing — run 'npm run build' locally and commit public_html/build"
 
 # Without the scheduler, unfinished game rows are never pruned.
@@ -90,9 +93,10 @@ php artisan optimize
 # Verify
 #---------------------------------------------------------------
 echo "→ verify"
-php artisan migrate:status --pending 2>/dev/null | grep -q "Pending" && fail "migrations still pending"
+out=$(php artisan migrate:status --pending 2>&1) || fail "migrate:status failed: $out"
+grep -q "Pending" <<<"$out" && fail "migrations still pending"
 
-APP_URL=$(grep -E '^APP_URL=' .env | cut -d= -f2- | tr -d '"')
+APP_URL=$(grep -E '^APP_URL=' .env | tail -n1 | cut -d= -f2- | tr -d "\"'\r" || true)
 if [ -n "$APP_URL" ] && command -v curl >/dev/null 2>&1; then
     CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "$APP_URL/up" || echo 000)
     [ "$CODE" = "200" ] || fail "$APP_URL/up returned $CODE"
