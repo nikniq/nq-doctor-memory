@@ -80,6 +80,16 @@ class ScoreController extends Controller
         }
 
         $score = DB::transaction(function () use ($game, $data, $user, $isVerifiedPlayer) {
+            // Claim the game first, so overlapping submissions cannot both pass.
+            $claimed = Game::whereKey($game->id)
+                ->whereNotNull('finished_at')
+                ->whereNull('scored_at')
+                ->update(['scored_at' => now()]);
+
+            if ($claimed === 0) {
+                throw ValidationException::withMessages(['game' => 'This game has already been scored.']);
+            }
+
             $score = Score::create([
                 'user_id' => $isVerifiedPlayer ? $user->id : null,
                 'player_name' => $isVerifiedPlayer ? $user->name : trim($data['player_name']),
@@ -89,7 +99,7 @@ class ScoreController extends Controller
                 'seconds' => $game->seconds,
             ]);
 
-            $game->update(['scored_at' => now(), 'score_id' => $score->id]);
+            Game::whereKey($game->id)->update(['score_id' => $score->id]);
 
             return $score;
         });

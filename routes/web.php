@@ -17,15 +17,15 @@ Route::get('/', GameController::class)->name('game');
 Route::get('/leaderboard', LeaderboardController::class)->name('leaderboard');
 
 Route::post('/games', [GameSessionController::class, 'store'])
-    ->middleware('throttle:30,1')
+    ->middleware('throttle:30,1,games')
     ->name('games.store');
 Route::post('/games/{game}/finish', [GameSessionController::class, 'finish'])
-    ->middleware('throttle:30,1')
+    ->middleware('throttle:30,1,games')
     ->name('games.finish');
 
 Route::get('/scores', [ScoreController::class, 'index'])->name('scores.index');
 Route::post('/scores', [ScoreController::class, 'store'])
-    ->middleware('throttle:10,1')
+    ->middleware('throttle:10,1,scores')
     ->name('scores.store');
 
 Route::middleware('guest')->group(function () {
@@ -48,7 +48,7 @@ Route::middleware('guest')->group(function () {
 
 // Works signed out too, so the link can be opened on any device.
 Route::get('/email/verify/{id}/{hash}', [EmailVerificationController::class, 'verify'])
-    ->middleware(['signed', 'throttle:6,1'])
+    ->middleware(['signed', 'throttle:6,1,verify'])
     ->name('verification.verify');
 
 Route::middleware('auth')->group(function () {

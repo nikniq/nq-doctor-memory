@@ -148,4 +148,35 @@ class ScoreTest extends TestCase
             ->assertJsonCount(1, 'data')
             ->assertJsonPath('data.0.player_name', 'Free');
     }
+
+    public function test_overlapping_submissions_score_a_game_only_once(): void
+    {
+        $game = Game::factory()->finished(turns: 10, seconds: 20)->create();
+        $nested = false;
+
+        // A second POST /scores arrives after the first passed its checks but
+        // before it created the score row.
+        Score::creating(function () use (&$nested, $game) {
+            if ($nested) {
+                return;
+            }
+            $nested = true;
+            $this->postJson('/scores', ['game' => $game->id, 'player_name' => 'Twin'])
+                ->assertUnprocessable()
+                ->assertJsonValidationErrors(['game' => 'This game has already been scored.']);
+        });
+
+        $this->postJson('/scores', ['game' => $game->id, 'player_name' => 'Twin'])->assertCreated();
+
+        $this->assertSame(1, Score::count());
+    }
+
+    public function test_scoring_several_games_in_a_minute_is_not_throttled_by_starting_them(): void
+    {
+        foreach (range(1, 4) as $round) {
+            $token = $this->postJson('/games', ['difficulty' => '4x3'])->assertCreated()->json('token');
+            $this->postJson("/games/{$token}/finish", ['turns' => 10, 'seconds' => 1])->assertOk();
+            $this->postJson('/scores', ['game' => $token, 'player_name' => 'Busy'])->assertCreated();
+        }
+    }
 }

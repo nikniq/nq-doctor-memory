@@ -5,6 +5,8 @@ namespace Tests\Feature;
 use App\Models\Game;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class GameSessionTest extends TestCase
@@ -25,6 +27,39 @@ class GameSessionTest extends TestCase
         $this->assertSame(15, $game->pairs);
         $this->assertSame(2, $game->players);
         $this->assertTrue($game->isDaily());
+    }
+
+    public function test_only_a_verified_account_owns_the_games_it_starts(): void
+    {
+        $this->postJson('/games', ['difficulty' => '4x4'])->assertCreated()->assertJson(['account' => null]);
+
+        $unverified = User::factory()->unverified()->create();
+        $token = $this->actingAs($unverified)->postJson('/games', ['difficulty' => '4x4'])
+            ->assertCreated()
+            ->assertJson(['account' => null])
+            ->json('token');
+        $this->assertNull(Game::findOrFail($token)->user_id);
+
+        $verified = User::factory()->create(['name' => 'House']);
+        $this->actingAs($verified)->postJson('/games', ['difficulty' => '4x4'])
+            ->assertCreated()
+            ->assertJson(['account' => 'House']);
+    }
+
+    public function test_a_daily_game_must_be_for_todays_board(): void
+    {
+        $this->travelTo('2026-10-23 00:00:20');
+
+        $this->postJson('/games', ['difficulty' => '4x4', 'daily' => true, 'date' => '2026-10-22'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['date' => 'A new daily challenge has started. Reload to play it.']);
+
+        $today = $this->postJson('/games', ['difficulty' => '4x4', 'daily' => true, 'date' => '2026-10-23'])
+            ->assertCreated()
+            ->json('token');
+        $this->assertSame('2026-10-23', Game::findOrFail($today)->played_on->toDateString());
+
+        $this->postJson('/games', ['difficulty' => '4x4', 'daily' => true])->assertCreated();
     }
 
     public function test_starting_a_game_validates_the_grid_and_player_count(): void
@@ -57,19 +92,43 @@ class GameSessionTest extends TestCase
             ->assertJson(['scorable' => false]);
     }
 
-    public function test_impossible_turns_and_times_are_rejected(): void
+    public function test_impossible_turns_are_rejected(): void
     {
-        $game = Game::factory()->create(['started_at' => now()->subSeconds(20)]);
+        $game = Game::factory()->create();
 
         $this->postJson("/games/{$game->id}/finish", ['turns' => 7, 'seconds' => 10])
             ->assertUnprocessable()
             ->assertJsonValidationErrors(['turns' => 'Turns must be at least 8.']);
 
-        $this->postJson("/games/{$game->id}/finish", ['turns' => 9, 'seconds' => 40])
-            ->assertUnprocessable()
-            ->assertJsonValidationErrors(['seconds' => 'That time does not match the server clock.']);
-
         $this->assertFalse($game->fresh()->isFinished());
+    }
+
+    public function test_a_time_longer_than_the_server_clock_is_clamped_to_it(): void
+    {
+        $this->freezeTime();
+        $game = Game::factory()->create(['started_at' => now()->subSeconds(20)]);
+
+        $this->postJson("/games/{$game->id}/finish", ['turns' => 9, 'seconds' => 40])
+            ->assertOk()
+            ->assertJson(['seconds' => 23]);
+    }
+
+    public function test_a_game_saved_before_pairs_were_recorded_still_needs_one_turn_per_pair(): void
+    {
+        $id = (string) Str::uuid();
+        DB::table('games')->insert([
+            'id' => $id,
+            'difficulty' => '4x4',
+            'pairs' => 0,
+            'players' => 1,
+            'started_at' => now()->subMinute(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->postJson("/games/{$id}/finish", ['turns' => 1, 'seconds' => 30])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['turns' => 'Turns must be at least 8.']);
     }
 
     public function test_a_game_can_only_be_finished_once(): void

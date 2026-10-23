@@ -74,4 +74,16 @@ class EmailVerificationTest extends TestCase
             ->get('/account')
             ->assertRedirect(route('verification.notice'));
     }
+
+    public function test_playing_games_does_not_use_up_the_verification_link_limit(): void
+    {
+        $user = User::factory()->unverified()->create();
+
+        foreach (range(1, 3) as $round) {
+            $token = $this->actingAs($user)->postJson('/games', ['difficulty' => '4x3'])->json('token');
+            $this->actingAs($user)->postJson("/games/{$token}/finish", ['turns' => 10, 'seconds' => 1])->assertOk();
+        }
+
+        $this->actingAs($user)->get($this->verificationUrl($user))->assertRedirect(route('game'));
+    }
 }
