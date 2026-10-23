@@ -37,7 +37,7 @@
                     </p>
                 @endauth
 
-                <div class="game__toolbar">
+                <div class="game__toolbar" id="gameToolbar">
                     <div class="game__modes" role="group" aria-label="Game mode">
                         <button type="button" class="game__mode" data-mode="free" aria-pressed="true">Free play</button>
                         <button type="button" class="game__mode" data-mode="daily" aria-pressed="false">Daily challenge</button>
@@ -63,6 +63,8 @@
                     </label>
 
                     <button type="button" id="resetBtn" class="game__button">New Game</button>
+                    {{-- Phones only, while playing: brings back the settings the focus mode hides. --}}
+                    <button type="button" id="settingsToggle" class="game__icon-button game__settings" aria-expanded="false" aria-controls="gameToolbar" aria-label="Game settings" title="Game settings">⚙️</button>
                 </div>
 
                 <p id="modeHint" class="game__hint">
@@ -132,6 +134,9 @@
             <p id="winRecord" class="win__record" hidden>New personal best!</p>
             <p id="winShort" class="win__summary" hidden></p>
             <p id="unrankedNotice" class="win__note" hidden></p>
+            @guest
+                <p class="win__note win__note--guest"><a href="{{ route('register') }}">Register</a> to save your games and join the player rankings.</p>
+            @endguest
             <p id="winSaved" class="win__saved" hidden>
                 @auth
                     @if (auth()->user()->hasVerifiedEmail())

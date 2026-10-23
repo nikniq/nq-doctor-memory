@@ -105,9 +105,10 @@
 .game__board {
     --columns: 4;
     --columns-narrow: 4;
+    --gap: 1em;
     display: grid;
     grid-template-columns: repeat(var(--columns), minmax(0, 1fr));
-    gap: 1em;
+    gap: var(--gap);
     margin-bottom: 2em;
 }
 
@@ -155,8 +156,8 @@
     }
 
     .game__board {
+        --gap: 0.6em;
         grid-template-columns: repeat(var(--columns-narrow), minmax(0, 1fr));
-        gap: 0.6em;
     }
 }
 
@@ -314,7 +315,7 @@
 
 @media (max-width: 640px) {
     .game__board[data-dense] {
-        gap: 0.4em;
+        --gap: 0.4em;
     }
 
     .game__board[data-dense] .card__face {
@@ -1194,4 +1195,59 @@
 .game__intro[hidden],
 #winShort[hidden] {
     display: none;
+}
+
+/* The settings button only exists in the phone focus mode. */
+.game__settings {
+    display: none;
+}
+
+/*
+ * Phone focus mode: once play starts, the header shrinks to the title, New
+ * Game, a settings button and the stats, and the board is sized from the
+ * height left below it (--board-top is measured by the script) so every
+ * card and the turn count stay on screen.
+ */
+@media (max-width: 640px) {
+    .game--playing .game__title {
+        font-size: var(--game-font-size);
+        margin-bottom: 0.4em;
+    }
+
+    .game--playing .game__notice,
+    .game--playing .game__hint,
+    .game--playing .game__intro {
+        display: none;
+    }
+
+    .game--playing:not(.game--toolbar-open) .game__toolbar > :not(#resetBtn):not(#settingsToggle) {
+        display: none;
+    }
+
+    .game--playing .game__toolbar {
+        margin-bottom: 0.5em;
+    }
+
+    .game--playing .game__toolbar #resetBtn {
+        padding: 0.45em 1.25em;
+    }
+
+    .game--playing .game__settings {
+        display: inline-block;
+    }
+
+    .game--playing .game__header {
+        margin-bottom: 0.5em;
+    }
+
+    .game--playing .game__board {
+        /* card height = (space below the board top - row gaps) / rows; cards are 3:4 */
+        width: min(100%, calc(((100dvh - var(--board-top, 12rem) - 0.75rem - (var(--rows, 4) - 1) * var(--gap)) / var(--rows, 4)) * 0.75 * var(--cols, 4) + (var(--cols, 4) - 1) * var(--gap)));
+        margin-inline: auto;
+    }
+
+    .game--playing .fact {
+        top: 0.5em;
+        bottom: auto;
+    }
 }

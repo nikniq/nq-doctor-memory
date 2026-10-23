@@ -343,6 +343,31 @@ try {
         await laptop.close();
     }
 
+    // Phone focus mode: once play starts, the whole board and the turn count fit on screen.
+    for (const viewport of [{ width: 390, height: 844 }, { width: 375, height: 667 }]) {
+        const small = await browser.newPage({ viewport });
+        small.on('pageerror', (e) => errors.push(e.message));
+        await small.goto(BASE);
+        const grids = await small.$$eval('#difficulty option', (options) => options.map((o) => o.value));
+        const misfits = [];
+        for (const grid of grids) {
+            await small.selectOption('#difficulty', grid);
+            await small.click('.card[data-card-id="0"]');
+            await small.waitForTimeout(150);
+            const fit = await small.evaluate(() => ({
+                bottom: document.getElementById('gameBoard').getBoundingClientRect().bottom,
+                height: window.innerHeight,
+                movesVisible: document.getElementById('moves').getBoundingClientRect().top >= 0,
+            }));
+            if (fit.bottom > fit.height + 0.5 || !fit.movesVisible) misfits.push(`${grid} (bottom ${Math.round(fit.bottom)} of ${fit.height})`);
+            if (grid === '6x6' && viewport.height === 667) await shot(small, 'phone-focus-6x6');
+            await small.click('#settingsToggle');
+            await small.selectOption('#difficulty', grid); // reachable again through Settings
+        }
+        check(misfits.length === 0, `focus mode fits every grid at ${viewport.width}×${viewport.height}${misfits.length ? `: ${misfits.join(', ')}` : ''}`);
+        await small.close();
+    }
+
     // Phone width.
     const phone = await browser.newPage({ viewport: { width: 375, height: 800 } });
     phone.on('pageerror', (e) => errors.push(e.message));

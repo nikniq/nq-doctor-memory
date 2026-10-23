@@ -87,6 +87,7 @@ if (app) {
         introLine: document.getElementById('introLine'),
         winShort: document.getElementById('winShort'),
         nextGridBtn: document.getElementById('nextGridBtn'),
+        settingsToggle: document.getElementById('settingsToggle'),
     };
 
     const defaultDifficulty = difficulties[app.dataset.defaultDifficulty] ? app.dataset.defaultDifficulty : Object.keys(difficulties)[0];
@@ -384,6 +385,7 @@ if (app) {
         canFlip = true;
         lastSubmittedId = null;
         lastResult = null;
+        leaveFocusMode();
         gameSession = null;
         startResult = null;
         finishRequest = null;
@@ -439,6 +441,7 @@ if (app) {
         if (flipped.length === 0) hideFact();
 
         startTimer();
+        enterFocusMode();
         ensureGameSession();
         sounds.flip();
         card.isFlipped = true;
@@ -635,10 +638,10 @@ if (app) {
         const { columns, columns_narrow: narrow, pairs } = level();
         el.board.style.setProperty('--columns', columns);
         el.board.style.setProperty('--columns-narrow', narrow ?? columns);
-        el.board.style.setProperty('--rows', Math.ceil((pairs * 2) / columns));
         el.board.toggleAttribute('data-dense', (narrow ?? columns) >= 5);
         hideFact();
         el.board.replaceChildren(...cards.map(createCard));
+        setBoardShape();
         el.pairsCount.textContent = matchedPairs;
         el.pairsTotal.textContent = pairs;
         el.moves.textContent = moves;
@@ -652,6 +655,33 @@ if (app) {
         renderPlayers();
         renderStreak();
         renderBest();
+    }
+
+    /** Phones: shrink the header while playing (CSS does nothing on wide screens). */
+    function enterFocusMode() {
+        if (app.classList.contains('game--playing')) return;
+        app.classList.add('game--playing');
+        measureBoardTop();
+    }
+
+    function leaveFocusMode() {
+        app.classList.remove('game--playing', 'game--toolbar-open');
+        el.settingsToggle?.setAttribute('aria-expanded', 'false');
+    }
+
+    function measureBoardTop() {
+        // Where the board starts with the compact header, at the top of the page.
+        const top = el.board.getBoundingClientRect().top + window.scrollY;
+        app.style.setProperty('--board-top', `${Math.round(top)}px`);
+        if (window.scrollY > 0 && window.matchMedia?.('(max-width: 640px)').matches) {
+            window.scrollTo({ top: 0 });
+        }
+    }
+
+    function setBoardShape() {
+        const columns = boardColumns();
+        el.board.style.setProperty('--cols', columns);
+        el.board.style.setProperty('--rows', Math.ceil(cards.length / columns));
     }
 
     function renderStarMeter() {
@@ -726,6 +756,7 @@ if (app) {
     // --- Win dialog, confetti, share ------------------------------------
 
     function showWinDialog(result) {
+        leaveFocusMode();
         if (result.players === 2) {
             showTwoPlayerResult(result);
             return;
@@ -1059,7 +1090,26 @@ if (app) {
     });
 
     el.board.addEventListener('keydown', handleBoardKeydown);
-    window.matchMedia?.('(max-width: 640px)').addEventListener?.('change', relabelCards);
+    window.matchMedia?.('(max-width: 640px)').addEventListener?.('change', () => {
+        setBoardShape();
+        relabelCards();
+        if (app.classList.contains('game--playing')) measureBoardTop();
+    });
+
+    el.settingsToggle?.addEventListener('click', () => {
+        const open = app.classList.toggle('game--toolbar-open');
+        el.settingsToggle.setAttribute('aria-expanded', String(open));
+        measureBoardTop();
+    });
+
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && !el.dialog.open && app.classList.contains('game--toolbar-open')) {
+            app.classList.remove('game--toolbar-open');
+            el.settingsToggle?.setAttribute('aria-expanded', 'false');
+            measureBoardTop();
+            el.settingsToggle?.focus();
+        }
+    });
     el.reset.addEventListener('click', newGame);
     el.playAgain.addEventListener('click', newGame);
     el.nextGridBtn?.addEventListener('click', () => {

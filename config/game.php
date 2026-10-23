@@ -83,7 +83,7 @@ return [
     'default_difficulty' => '4x4',
 
     'difficulties' => [
-        '4x3' => ['label' => '4 × 3', 'pairs' => 6, 'columns' => 4, 'columns_narrow' => 3, 'stars' => [3 => 10, 2 => 13]],
+        '4x3' => ['label' => '4 × 3', 'pairs' => 6, 'columns' => 4, 'columns_narrow' => 4, 'stars' => [3 => 10, 2 => 13]],
         '4x4' => ['label' => '4 × 4', 'pairs' => 8, 'columns' => 4, 'columns_narrow' => 4, 'stars' => [3 => 13, 2 => 18]],
         '5x4' => ['label' => '5 × 4', 'pairs' => 10, 'columns' => 5, 'columns_narrow' => 4, 'stars' => [3 => 16, 2 => 22]],
         '6x4' => ['label' => '6 × 4', 'pairs' => 12, 'columns' => 6, 'columns_narrow' => 4, 'stars' => [3 => 19, 2 => 27]],

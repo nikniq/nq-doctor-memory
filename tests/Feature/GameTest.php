@@ -22,7 +22,8 @@ class GameTest extends TestCase
             ->assertSee('data-today="'.now()->toDateString().'"', false)
             ->assertSee(route('scores.store'), false)
             ->assertSee(route('games.store'), false)
-            ->assertSee('2 players');
+            ->assertSee('2 players')
+            ->assertSee('id="settingsToggle"', false);
     }
 
     public function test_analytics_tag_is_only_rendered_when_configured(): void
