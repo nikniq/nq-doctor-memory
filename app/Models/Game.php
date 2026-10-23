@@ -25,6 +25,8 @@ class Game extends Model
         'turns',
         'seconds',
         'finished_at',
+        'unranked_reason',
+        'attempt',
         'scored_at',
         'score_id',
     ];
@@ -37,6 +39,7 @@ class Game extends Model
             'pairs' => 'integer',
             'turns' => 'integer',
             'seconds' => 'integer',
+            'attempt' => 'integer',
             'started_at' => 'datetime',
             'finished_at' => 'datetime',
             'scored_at' => 'datetime',
@@ -72,6 +75,41 @@ class Game extends Model
     public function isDaily(): bool
     {
         return $this->played_on !== null;
+    }
+
+    public const PRACTICE = 'practice';
+
+    public const IMPLAUSIBLE = 'implausible';
+
+    /**
+     * What the player is told about a game that is not ranked.
+     *
+     * @var array<string, string>
+     */
+    public const UNRANKED_MESSAGES = [
+        self::PRACTICE => "Replays of today's board are practice and don't go on the top scores.",
+        self::IMPLAUSIBLE => 'This result is being held for review.',
+    ];
+
+    public function isRanked(): bool
+    {
+        return $this->unranked_reason === null;
+    }
+
+    public function unrankedMessage(): ?string
+    {
+        return self::UNRANKED_MESSAGES[$this->unranked_reason] ?? null;
+    }
+
+    /**
+     * Games that count towards top scores and rankings.
+     *
+     * @param  Builder<Game>  $query
+     * @return Builder<Game>
+     */
+    public function scopeRanked(Builder $query): Builder
+    {
+        return $query->whereNull('unranked_reason');
     }
 
     /**

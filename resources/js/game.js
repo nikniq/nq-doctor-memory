@@ -18,6 +18,7 @@ import { formatTime, isBetter, starsFor } from './game/scoring.js';
 import { nextIndex } from './game/grid.js';
 import { CONNECTIVITY_MESSAGE, dailyDateChanged, requestError } from './game/session.js';
 import { cardLabel, turnMessage, winMessage } from './game/announce.js';
+import { formatCountdown, msUntil } from './game/daily.js';
 
 const app = document.getElementById('app');
 
@@ -29,6 +30,10 @@ if (app) {
     const gamesUrl = app.dataset.gamesUrl;
     const finishUrl = app.dataset.finishUrl;
     const accountName = app.dataset.playerName || null; // set for verified, signed-in players
+    let dailyResetsAt = app.dataset.dailyResets;
+    // Grids whose daily board this player has started today: replays are practice.
+    const dailyPlayed = new Set(JSON.parse(app.dataset.dailyPlayed || '[]'));
+    const startedThisDeal = new Set();
     const scoresUrl = app.dataset.scoresUrl;
     const storeUrl = app.dataset.storeUrl;
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content ?? '';
@@ -65,6 +70,8 @@ if (app) {
         scoreLabel: document.getElementById('scoreLabel'),
         signedOut: document.getElementById('signedOutNotice'),
         dailyNotice: document.getElementById('dailyNotice'),
+        practiceNotice: document.getElementById('practiceNotice'),
+        unrankedNotice: document.getElementById('unrankedNotice'),
         scoreForm: document.getElementById('scoreForm'),
         playerName: document.getElementById('playerName'),
         submitScore: document.getElementById('submitScore'),
@@ -90,6 +97,7 @@ if (app) {
     let startResult = null; // that response once it has arrived
     let finishRequest = null; // promise resolving once the server has recorded the finished game
     let savedToAccount = false;
+    let finishOutcome = null; // the server's verdict on the finished game
 
     // Every timer belongs to one deal. A new game bumps the generation and
     // cancels them, so nothing scheduled for the old board touches the new one.
@@ -324,6 +332,7 @@ if (app) {
                 throw error;
             }
             if (generation === gameGeneration) startResult = body;
+            if (payload.daily && playerCount === 1) startedThisDeal.add(payload.difficulty);
             return body;
         });
         // Failures surface when the score is submitted, not mid-game.
@@ -339,7 +348,12 @@ if (app) {
         }).then(async (response) => {
             const body = await readJson(response);
             if (!response.ok) throw requestError(response.status, body);
-            return { token: start.token, account: start.account ?? null };
+            return {
+                token: start.token,
+                account: start.account ?? null,
+                ranked: body.ranked !== false,
+                message: body.message ?? null,
+            };
         }, () => {
             throw requestError(0, null);
         }));
@@ -366,7 +380,11 @@ if (app) {
         startResult = null;
         finishRequest = null;
         savedToAccount = false;
+        finishOutcome = null;
         if (el.winSaved) el.winSaved.hidden = true;
+        // The previous deal's daily board now counts as played.
+        startedThisDeal.forEach((grid) => dailyPlayed.add(grid));
+        startedThisDeal.clear();
         currentPlayer = 0;
         playerScores = [0, 0];
         resetTimer();
@@ -462,7 +480,9 @@ if (app) {
                 finishGameSession(result).then((outcome) => {
                     if (generation !== gameGeneration) return;
                     savedToAccount = Boolean(outcome.account);
+                    finishOutcome = outcome;
                     if (el.dialog.open && el.winSaved) el.winSaved.hidden = !savedToAccount;
+                    if (el.dialog.open && result.players === 1) renderVerdict();
                 }, () => {});
                 sounds.win();
                 vibrate([40, 60, 40, 60, 120]);
@@ -613,11 +633,22 @@ if (app) {
         el.moves.textContent = moves;
         el.modes.forEach((button) => button.setAttribute('aria-pressed', String(button.dataset.mode === mode)));
         el.modeHint.hidden = mode !== 'daily';
+        renderPracticeNotice();
         el.players.value = String(playerCount);
         el.bestStat.hidden = playerCount === 2;
         renderPlayers();
         renderStreak();
         renderBest();
+    }
+
+    function renderPracticeNotice() {
+        if (!el.practiceNotice) return;
+        const practice = mode === 'daily' && playerCount === 1 && dailyPlayed.has(difficulty);
+        el.practiceNotice.hidden = !practice;
+        if (practice) {
+            const wait = formatCountdown(msUntil(dailyResetsAt, Date.now()));
+            el.practiceNotice.textContent = `You've played today's ${level().label}. Replays are practice. Next board in ${wait}.`;
+        }
     }
 
     function renderPlayers() {
@@ -698,11 +729,22 @@ if (app) {
         el.submitScore.disabled = false;
         el.share.textContent = 'Share result';
         renderScoreForm();
+        renderVerdict();
 
         openDialog();
         announce(winMessage(result));
         (el.playerName.hidden ? el.submitScore : el.playerName).focus();
         launchConfetti();
+    }
+
+    /** Practice and held games cannot go on the top scores: say why instead. */
+    function renderVerdict() {
+        const unranked = finishOutcome && !finishOutcome.ranked;
+        if (el.unrankedNotice) {
+            el.unrankedNotice.hidden = !unranked;
+            el.unrankedNotice.textContent = unranked ? finishOutcome.message ?? '' : '';
+        }
+        if (unranked) el.scoreForm.hidden = true;
     }
 
     /**
@@ -745,6 +787,7 @@ if (app) {
         el.winRecord.hidden = true;
         if (el.winSaved) el.winSaved.hidden = true;
         if (el.signedOut) el.signedOut.hidden = true;
+        if (el.unrankedNotice) el.unrankedNotice.hidden = true;
         el.scoreForm.hidden = true;
         el.scoreError.hidden = true;
         el.share.textContent = 'Share result';
@@ -841,7 +884,11 @@ if (app) {
             if (!asAccount) writeStorage('player', name);
             lastSubmittedId = body.data?.id ?? null;
             el.scoreForm.hidden = true;
-            el.winSummary.textContent += body.rank ? ` · ranked #${body.rank}` : '';
+            if (body.improved === false) {
+                el.winSummary.textContent += body.rank ? ` · your best here stays #${body.rank}` : '';
+            } else {
+                el.winSummary.textContent += body.rank ? ` · ranked #${body.rank}` : '';
+            }
             await loadLeaderboard();
             el.playAgain.focus();
         } catch (error) {
@@ -857,6 +904,11 @@ if (app) {
     function adoptServerDate(playedOn) {
         if (!dailyDateChanged(today, playedOn)) return;
         today = playedOn;
+        dailyPlayed.clear();
+        startedThisDeal.clear();
+        const next = new Date(`${playedOn}T00:00:00Z`);
+        next.setUTCDate(next.getUTCDate() + 1);
+        dailyResetsAt = next.toISOString(); // approximate until the next page load
         if (mode !== 'daily') return;
         if (moves === 0 && flipped.length === 0) {
             newGame(); // nothing played yet: deal today's board straight away
@@ -970,6 +1022,12 @@ if (app) {
         event.preventDefault();
         newGame();
     });
+
+    // Keep the countdown current, and pick up the new board once it is due.
+    setInterval(() => {
+        renderPracticeNotice();
+        if (mode === 'daily' && msUntil(dailyResetsAt, Date.now()) === 0) loadLeaderboard();
+    }, 60000);
 
     renderSoundButton();
     initializeGame();

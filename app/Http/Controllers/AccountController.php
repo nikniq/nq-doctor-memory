@@ -16,6 +16,7 @@ class AccountController extends Controller
 
         $gridStats = $user->games()
             ->finished()
+            ->ranked()
             ->where('players', 1)
             ->selectRaw('difficulty, COUNT(*) as games_played, MIN(turns) as best_turns, AVG(turns) as average_turns, MIN(seconds) as best_seconds')
             ->groupBy('difficulty')

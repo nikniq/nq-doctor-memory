@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Game;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\Request;
 
@@ -26,6 +27,31 @@ class GameController extends Controller
             'today' => now()->toDateString(),
             'gamesUrl' => route('games.store'),
             'playerName' => $user?->hasVerifiedEmail() ? $user->name : null,
+            'dailyPlayed' => $this->dailyGridsStarted($request),
         ]);
+    }
+
+    /**
+     * Grids whose solo daily board this player has already started today,
+     * so the page can say that another go is practice.
+     *
+     * @return list<string>
+     */
+    private function dailyGridsStarted(Request $request): array
+    {
+        $user = $request->user();
+        $query = Game::query()->where('players', 1)->whereDate('played_on', now()->toDateString());
+
+        if ($user?->hasVerifiedEmail()) {
+            $query->where('user_id', $user->id);
+        } else {
+            $ids = (array) $request->session()->get('daily_games', []);
+            if ($ids === []) {
+                return [];
+            }
+            $query->whereIn('id', $ids);
+        }
+
+        return $query->distinct()->orderBy('difficulty')->pluck('difficulty')->all();
     }
 }

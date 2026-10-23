@@ -75,11 +75,15 @@ class ScoreController extends Controller
             throw ValidationException::withMessages(['game' => 'Two-player games are not ranked.']);
         }
 
+        if (! $game->isRanked()) {
+            throw ValidationException::withMessages(['game' => $game->unrankedMessage()]);
+        }
+
         if ($game->isDaily() && ! $game->played_on->isToday()) {
             throw ValidationException::withMessages(['game' => 'That daily challenge has ended.']);
         }
 
-        $score = DB::transaction(function () use ($game, $data, $user, $isVerifiedPlayer) {
+        $outcome = DB::transaction(function () use ($game, $data, $user, $isVerifiedPlayer) {
             // Claim the game first, so overlapping submissions cannot both pass.
             $claimed = Game::whereKey($game->id)
                 ->whereNotNull('finished_at')
@@ -90,7 +94,7 @@ class ScoreController extends Controller
                 throw ValidationException::withMessages(['game' => 'This game has already been scored.']);
             }
 
-            $score = Score::create([
+            $candidate = new Score([
                 'user_id' => $isVerifiedPlayer ? $user->id : null,
                 'player_name' => $isVerifiedPlayer ? $user->name : trim($data['player_name']),
                 'difficulty' => $game->difficulty,
@@ -99,11 +103,29 @@ class ScoreController extends Controller
                 'seconds' => $game->seconds,
             ]);
 
-            Game::whereKey($game->id)->update(['score_id' => $score->id]);
+            // Verified players hold one row per board, replaced only by a better game.
+            $existing = $isVerifiedPlayer
+                ? Score::query()
+                    ->forBoard($game->difficulty, $game->played_on?->toDateString())
+                    ->where('user_id', $user->id)
+                    ->lockForUpdate()
+                    ->first()
+                : null;
 
-            return $score;
+            if ($existing && ! $this->beats($candidate, $existing)) {
+                Game::whereKey($game->id)->update(['score_id' => $existing->id]);
+
+                return ['score' => $existing, 'improved' => false];
+            }
+
+            $existing?->delete();
+            $candidate->save();
+            Game::whereKey($game->id)->update(['score_id' => $candidate->id]);
+
+            return ['score' => $candidate, 'improved' => true];
         });
 
+        $score = $outcome['score'];
         $rank = Score::query()
             ->forBoard($score->difficulty, $score->played_on?->toDateString())
             ->betterThan($score)
@@ -112,6 +134,19 @@ class ScoreController extends Controller
         return response()->json([
             'data' => Arr::only($score->toArray(), ['id', 'player_name', 'difficulty', 'played_on', 'moves', 'seconds']),
             'rank' => $rank,
-        ], 201);
+            'improved' => $outcome['improved'],
+        ], $outcome['improved'] ? 201 : 200);
+    }
+
+    /**
+     * Fewer turns wins; equal turns fall back to the faster time.
+     */
+    private function beats(Score $candidate, Score $existing): bool
+    {
+        if ($candidate->moves !== $existing->moves) {
+            return $candidate->moves < $existing->moves;
+        }
+
+        return $candidate->seconds < $existing->seconds;
     }
 }

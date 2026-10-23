@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Game;
+use App\Support\TurnOdds;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -54,16 +55,50 @@ class GameSessionController extends Controller
         $user = $request->user();
         $owner = $user?->hasVerifiedEmail() ? $user : null;
 
+        $players = $data['players'] ?? 1;
+        $isRankedDaily = $isDaily && $players === 1;
+
         $game = Game::create([
             'user_id' => $owner?->id,
             'difficulty' => $data['difficulty'],
             'played_on' => $isDaily ? $today : null,
-            'players' => $data['players'] ?? 1,
+            'players' => $players,
             'pairs' => $grids[$data['difficulty']]['pairs'],
             'started_at' => now(),
+            'attempt' => $isRankedDaily ? $this->dailyGamesStarted($request, $owner?->id, $data['difficulty'], $today) + 1 : null,
         ]);
 
-        return response()->json(['token' => $game->id, 'account' => $owner?->name], 201);
+        if ($isRankedDaily && $owner === null) {
+            $request->session()->push('daily_games', $game->id);
+        }
+
+        return response()->json([
+            'token' => $game->id,
+            'account' => $owner?->name,
+            'attempt' => $game->attempt,
+        ], 201);
+    }
+
+    /**
+     * Solo games this player has already STARTED on today's board for a grid.
+     * Started, not finished: otherwise abandoning a bad start and dealing
+     * again would give a fresh first attempt. Accounts are tracked by user;
+     * guests by their session, which is the best a guest can be told apart.
+     */
+    private function dailyGamesStarted(Request $request, ?int $userId, string $grid, string $day): int
+    {
+        $query = Game::query()
+            ->where('players', 1)
+            ->where('difficulty', $grid)
+            ->whereDate('played_on', $day);
+
+        if ($userId !== null) {
+            return $query->where('user_id', $userId)->count();
+        }
+
+        $ids = (array) $request->session()->get('daily_games', []);
+
+        return $ids === [] ? 0 : $query->whereIn('id', $ids)->count();
     }
 
     /**
@@ -103,11 +138,35 @@ class GameSessionController extends Controller
         }
 
         $game->refresh();
+        $game->update(['unranked_reason' => $this->unrankedReason($game, $pairs)]);
 
         return response()->json([
             'turns' => $game->turns,
             'seconds' => $game->seconds,
-            'scorable' => $game->players === 1,
+            'ranked' => $game->isRanked(),
+            'reason' => $game->unranked_reason,
+            'message' => $game->unrankedMessage(),
+            'scorable' => $game->players === 1 && $game->isRanked(),
         ]);
+    }
+
+    /**
+     * Why a finished game should not count, or null when it should.
+     *
+     * Implausible: a perfect-memory player would do this well less often
+     * than config('game.implausible_odds'), or the time is shorter than the
+     * misses allow (each miss locks the board for 0.9 s).
+     */
+    private function unrankedReason(Game $game, int $pairs): ?string
+    {
+        $misses = $game->turns - $pairs;
+        $tooLucky = TurnOdds::atMost($pairs, $game->turns) < config('game.implausible_odds');
+        $tooFast = $game->seconds + self::CLOCK_TOLERANCE_SECONDS < 0.9 * $misses;
+
+        if ($tooLucky || $tooFast) {
+            return Game::IMPLAUSIBLE;
+        }
+
+        return ($game->attempt ?? 1) > 1 ? Game::PRACTICE : null;
     }
 }

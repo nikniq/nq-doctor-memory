@@ -12,7 +12,7 @@
 
         <section class="panel">
             <h2 class="panel__title">Records by grid</h2>
-            <p class="panel__intro">Solo games only. Two-player games appear in your history below.</p>
+            <p class="panel__intro">Ranked solo games only. Practice replays, held results and two-player games appear in your history below.</p>
             <div class="table-wrap">
                 <table class="table">
                     <thead>
@@ -49,7 +49,14 @@
                                 <tr>
                                     <td><time datetime="{{ $game->finished_at->toIso8601String() }}">{{ $game->finished_at->diffForHumans() }}</time></td>
                                     <td>{{ $grids[$game->difficulty]['label'] ?? $game->difficulty }}</td>
-                                    <td>{{ $game->players === 2 ? 'Two players' : ($game->isDaily() ? 'Daily' : 'Free play') }}</td>
+                                    <td>
+                                        {{ $game->players === 2 ? 'Two players' : ($game->isDaily() ? 'Daily' : 'Free play') }}
+                                        @if ($game->unranked_reason === \App\Models\Game::PRACTICE)
+                                            <span class="muted">· Practice</span>
+                                        @elseif ($game->unranked_reason === \App\Models\Game::IMPLAUSIBLE)
+                                            <span class="muted">· Held for review</span>
+                                        @endif
+                                    </td>
                                     <td class="num">{{ $game->turns }}</td>
                                     <td class="num">{{ \App\Support\Duration::format($game->seconds) }}</td>
                                 </tr>

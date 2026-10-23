@@ -196,6 +196,7 @@ try {
     check(!(await page.$('#winDialog[open]')), 'escape closes the win dialog');
     check(await page.isHidden('#winSaved'), 'guests are not told the game was saved');
     check(await page.textContent('#moves') === '0', 'new game resets moves');
+    check((await page.textContent('#practiceNotice')).includes('Replays are practice') && await page.isVisible('#practiceNotice'), 'replaying the daily board is marked as practice, with a countdown');
 
     // Daily boards are identical across reloads.
     const firstFace = async () => {

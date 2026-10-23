@@ -8,11 +8,13 @@
         data-difficulties='@json($difficulties)'
         data-default-difficulty="{{ $defaultDifficulty }}"
         data-today="{{ $today }}"
+        data-daily-resets="{{ now()->addDay()->startOfDay()->toIso8601String() }}"
         data-title="{{ $title }}"
         data-win-message="{{ $winMessage }}"
         data-games-url="{{ $gamesUrl }}"
         data-finish-url="{{ route('games.finish', ['game' => '__GAME__']) }}"
         data-player-name="{{ $playerName }}"
+        data-daily-played='@json($dailyPlayed)'
         data-scores-url="{{ route('scores.index') }}"
         data-store-url="{{ route('scores.store') }}"
     >
@@ -67,6 +69,7 @@
                     Everyone gets the same board today. Beat the clock and the leaderboard.
                     <span id="streak" class="game__streak" hidden></span>
                 </p>
+                <p id="practiceNotice" class="game__hint" hidden></p>
                 <p id="dailyNotice" class="game__hint game__hint--alert" role="status" hidden>A new daily challenge is ready. Press New Game to play it.</p>
 
                 <div id="playersBar" class="players" hidden>
@@ -123,6 +126,7 @@
             <div id="winStars" class="win__stars" role="img" aria-label=""></div>
             <p id="winSummary" class="win__summary"></p>
             <p id="winRecord" class="win__record" hidden>New personal best!</p>
+            <p id="unrankedNotice" class="win__note" hidden></p>
             <p id="winSaved" class="win__saved" hidden>
                 @auth
                     @if (auth()->user()->hasVerifiedEmail())

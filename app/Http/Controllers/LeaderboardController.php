@@ -63,6 +63,7 @@ class LeaderboardController extends Controller
     {
         return Game::query()
             ->finished()
+            ->ranked()
             ->where('players', 1)
             ->whereHas('user', fn (Builder $query) => $query->whereNotNull('email_verified_at'));
     }

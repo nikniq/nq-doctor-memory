@@ -104,4 +104,11 @@ return [
 
     'rankings_min_games' => 3,
 
+    /*
+    | A finished game is held for review, not ranked, when a player with
+    | perfect memory would do that well less often than this.
+    */
+
+    'implausible_odds' => 1e-6,
+
 ];

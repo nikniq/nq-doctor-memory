@@ -3,6 +3,7 @@ import { dealBoard, hashString, seededRandom, shuffle } from '../../resources/js
 import { formatTime, isBetter, starsFor } from '../../resources/js/game/scoring.js';
 import { currentStreak, nextStreak, yesterdayOf } from '../../resources/js/game/streak.js';
 import { nextIndex } from '../../resources/js/game/grid.js';
+import { formatCountdown, msUntil } from '../../resources/js/game/daily.js';
 import { cardLabel, positionOf, turnMessage, winMessage } from '../../resources/js/game/announce.js';
 import { CONNECTIVITY_MESSAGE, dailyDateChanged, firstErrorMessage, requestError } from '../../resources/js/game/session.js';
 
@@ -165,5 +166,20 @@ describe('screen-reader text', () => {
         expect(winMessage({ players: 1, moves: 10, stars: 3 })).toBe('All pairs found in 10 turns. 3 of 3 stars.');
         expect(winMessage({ players: 2, playerScores: [4, 2] })).toBe('All pairs found. Player 1 wins, 4 to 2.');
         expect(winMessage({ players: 2, playerScores: [3, 3] })).toBe("All pairs found. It's a tie, 3 to 3.");
+    });
+});
+
+describe('daily countdown', () => {
+    it('measures the time until the next board and never goes negative', () => {
+        const now = Date.parse('2026-10-23T18:48:00Z');
+        expect(msUntil('2026-10-24T00:00:00+00:00', now)).toBe(5 * 3600000 + 12 * 60000);
+        expect(msUntil('2026-10-23T00:00:00Z', now)).toBe(0);
+        expect(msUntil('not a date', now)).toBe(0);
+    });
+
+    it('reads naturally', () => {
+        expect(formatCountdown(5 * 3600000 + 12 * 60000)).toBe('5h 12m');
+        expect(formatCountdown(12 * 60000 + 59000)).toBe('12m');
+        expect(formatCountdown(30000)).toBe('under a minute');
     });
 });

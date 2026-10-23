@@ -1149,3 +1149,15 @@
         outline-color: Highlight;
     }
 }
+
+.win__note {
+    margin: 0.75em 0;
+    padding: 0.6em 0.8em;
+    border-radius: 8px;
+    background-color: rgba(0, 0, 0, 0.06);
+    font-size: 0.9em;
+}
+
+.win__note[hidden] {
+    display: none;
+}
