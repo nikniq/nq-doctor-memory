@@ -1299,3 +1299,38 @@
     font-size: 0.85em;
     opacity: 0.8;
 }
+
+/* Daily results in the win dialog */
+.daily-result {
+    margin: 0.5em 0 0.75em;
+}
+
+.daily-result[hidden] {
+    display: none;
+}
+
+.daily-result__rank {
+    margin: 0 0 0.5em;
+    font-weight: 600;
+}
+
+.daily-chart {
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    gap: 2px;
+    height: 48px;
+}
+
+.daily-chart__bar {
+    flex: 0 1 10px;
+    min-width: 3px;
+    border-radius: 2px 2px 0 0;
+    background-color: var(--game-card-back);
+    opacity: 0.45;
+}
+
+.daily-chart__bar--mine {
+    opacity: 1;
+    background-color: var(--game-button);
+}

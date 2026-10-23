@@ -18,7 +18,7 @@ import { formatTime, isBetter, nextGrid, starsFor, starTarget } from './game/sco
 import { nextIndex } from './game/grid.js';
 import { CONNECTIVITY_MESSAGE, dailyDateChanged, requestError } from './game/session.js';
 import { cardLabel, turnMessage, winMessage } from './game/announce.js';
-import { formatCountdown, msUntil } from './game/daily.js';
+import { barHeights, formatCountdown, msUntil, percentileText } from './game/daily.js';
 import { shareText as summarise, shareUrl } from './game/share.js';
 
 const app = document.getElementById('app');
@@ -36,6 +36,7 @@ if (app) {
     const dailyPlayed = new Set(JSON.parse(app.dataset.dailyPlayed || '[]'));
     const startedThisDeal = new Set();
     const scoresUrl = app.dataset.scoresUrl;
+    const dailyStatsUrl = app.dataset.dailyStatsUrl;
     const storeUrl = app.dataset.storeUrl;
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content ?? '';
     const STORAGE_PREFIX = 'doctor-memory';
@@ -73,6 +74,9 @@ if (app) {
         dailyNotice: document.getElementById('dailyNotice'),
         practiceNotice: document.getElementById('practiceNotice'),
         unrankedNotice: document.getElementById('unrankedNotice'),
+        dailyResult: document.getElementById('dailyResult'),
+        dailyRank: document.getElementById('dailyRank'),
+        dailyChart: document.getElementById('dailyChart'),
         scoreForm: document.getElementById('scoreForm'),
         playerName: document.getElementById('playerName'),
         submitScore: document.getElementById('submitScore'),
@@ -372,6 +376,7 @@ if (app) {
                 account: start.account ?? null,
                 ranked: body.ranked !== false,
                 message: body.message ?? null,
+                daily: body.daily ?? null,
             };
         }, () => {
             throw requestError(0, null);
@@ -401,6 +406,8 @@ if (app) {
         finishRequest = null;
         savedToAccount = false;
         finishOutcome = null;
+        if (el.dailyResult) el.dailyResult.hidden = true;
+        el.dailyChart?.replaceChildren();
         if (el.winSaved) el.winSaved.hidden = true;
         // The previous deal's daily board now counts as played.
         startedThisDeal.forEach((grid) => dailyPlayed.add(grid));
@@ -507,6 +514,7 @@ if (app) {
                     finishOutcome = outcome;
                     if (el.dialog.open && el.winSaved) el.winSaved.hidden = !savedToAccount;
                     if (el.dialog.open && result.players === 1) renderVerdict();
+                    if (outcome.daily) showDailyResult(result, outcome.daily, generation);
                 }, () => {});
                 sounds.win();
                 vibrate([40, 60, 40, 60, 120]);
@@ -822,6 +830,38 @@ if (app) {
         launchConfetti();
     }
 
+    /** Today's standing and the spread of results on this daily board. */
+    async function showDailyResult(result, standing, generation) {
+        if (!el.dailyResult) return;
+        result.dailyShare = { number: standing.number, line: percentileText(standing) };
+        el.dailyRank.textContent = `Daily #${standing.number} · ${percentileText(standing)}.`;
+        el.dailyResult.hidden = false;
+        try {
+            const response = await fetch(`${dailyStatsUrl}?difficulty=${encodeURIComponent(result.difficulty)}`, { headers: { Accept: 'application/json' } });
+            if (!response.ok || generation !== gameGeneration) return;
+            renderDailyChart(await response.json(), result.moves);
+        } catch {
+            // The standing line is enough without the chart.
+        }
+    }
+
+    function renderDailyChart(stats, mine) {
+        const buckets = stats.buckets ?? [];
+        const heights = barHeights(buckets, 48);
+        const mineIndex = buckets.findIndex((b) => b.turns === mine || (typeof b.turns === 'string' && mine >= parseInt(b.turns, 10)));
+        el.dailyChart.replaceChildren(...buckets.map((bucket, index) => {
+            const bar = document.createElement('div');
+            bar.className = `daily-chart__bar${index === mineIndex ? ' daily-chart__bar--mine' : ''}`;
+            bar.style.height = `${heights[index]}px`;
+            bar.title = `${bucket.turns} turns: ${bucket.count}`;
+            return bar;
+        }));
+        const busiest = buckets.reduce((best, b) => (b.count > (best?.count ?? -1) ? b : best), null);
+        el.dailyChart.setAttribute('aria-label', busiest
+            ? `Most players took ${busiest.turns} turns; you took ${mine}.`
+            : '');
+    }
+
     /** Practice and held games cannot go on the top scores: say why instead. */
     function renderVerdict() {
         const unranked = finishOutcome && !finishOutcome.ranked;
@@ -906,7 +946,7 @@ if (app) {
     function shareText() {
         const result = lastResult;
         const url = shareUrl(window.location.origin, { mode: result.mode, grid: result.difficulty });
-        return summarise(result, { title: gameTitle, url });
+        return summarise(result, { title: gameTitle, url, daily: result.dailyShare ?? null });
     }
 
     async function shareResult() {

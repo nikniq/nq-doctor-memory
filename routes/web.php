@@ -9,6 +9,7 @@ use App\Http\Controllers\Auth\GoogleController;
 use App\Http\Controllers\Auth\NewPasswordController;
 use App\Http\Controllers\Auth\PasswordResetLinkController;
 use App\Http\Controllers\Auth\RegisteredUserController;
+use App\Http\Controllers\DailyStatsController;
 use App\Http\Controllers\GameController;
 use App\Http\Controllers\GameSessionController;
 use App\Http\Controllers\LeaderboardController;
@@ -27,6 +28,9 @@ Route::post('/games/{game}/finish', [GameSessionController::class, 'finish'])
     ->name('games.finish');
 
 Route::get('/scores', [ScoreController::class, 'index'])->name('scores.index');
+Route::get('/daily/stats', DailyStatsController::class)
+    ->middleware('throttle:60,1,stats')
+    ->name('daily.stats');
 Route::post('/scores', [ScoreController::class, 'store'])
     ->middleware('throttle:10,1,scores')
     ->name('scores.store');

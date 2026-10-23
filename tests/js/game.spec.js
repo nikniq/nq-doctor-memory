@@ -3,7 +3,7 @@ import { dealBoard, hashString, seededRandom, shuffle } from '../../resources/js
 import { formatTime, isBetter, nextGrid, starsFor, starTarget } from '../../resources/js/game/scoring.js';
 import { currentStreak, nextStreak, yesterdayOf } from '../../resources/js/game/streak.js';
 import { nextIndex } from '../../resources/js/game/grid.js';
-import { formatCountdown, msUntil } from '../../resources/js/game/daily.js';
+import { barHeights, formatCountdown, msUntil, percentileText } from '../../resources/js/game/daily.js';
 import { shareText, shareUrl } from '../../resources/js/game/share.js';
 import { cardLabel, positionOf, turnMessage, winMessage } from '../../resources/js/game/announce.js';
 import { CONNECTIVITY_MESSAGE, dailyDateChanged, firstErrorMessage, requestError } from '../../resources/js/game/session.js';
@@ -235,5 +235,26 @@ describe('sharing', () => {
             .toBe(`Doctor Memory Game · Daily challenge 2026-10-23 · 4 × 4\n⭐⭐☆ 15 turns in 1:15\n${url}`);
         expect(shareText({ players: 2, playerScores: [5, 3], label: '4 × 4' }, { title: 'Doctor Memory Game', url }))
             .toBe(`Doctor Memory Game · 2 players · 4 × 4\nPlayer 1 wins 5 – 3\n${url}`);
+    });
+});
+
+describe('daily results', () => {
+    it('reports a percentile once enough people have played', () => {
+        expect(percentileText({ players: 1, beaten: 0 })).toBe('You are the first player today');
+        expect(percentileText({ players: 4, beaten: 2 })).toBe('You are one of the first 4 players today');
+        expect(percentileText({ players: 41, beaten: 27 })).toBe('Better than 68% of 41 players today');
+        expect(percentileText({ players: 5, beaten: 4 })).toBe('Better than 100% of 5 players today');
+    });
+
+    it('scales bars to the busiest bucket', () => {
+        expect(barHeights([{ count: 1 }, { count: 4 }, { count: 0 }], 48)).toEqual([12, 48, 0]);
+        expect(barHeights([{ count: 1 }, { count: 100 }], 48)).toEqual([2, 48]);
+        expect(barHeights([], 48)).toEqual([]);
+    });
+
+    it('shares a numbered daily result', () => {
+        const result = { players: 1, mode: 'daily', today: '2026-10-23', label: '4 × 4', stars: 2, moves: 14, seconds: 62 };
+        expect(shareText(result, { title: 'Doctor Memory Game', url: 'https://x/', daily: { number: 23, line: 'Better than 68% of 41 players today' } }))
+            .toBe('Doctor Memory #23 · 4 × 4 · ⭐⭐ · 14 turns · 1:02\nBetter than 68% of 41 players today\nhttps://x/');
     });
 });

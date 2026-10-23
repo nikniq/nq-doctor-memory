@@ -12,8 +12,8 @@ export function shareUrl(origin, { mode, grid }) {
     return `${origin.replace(/\/$/, '')}/${query ? `?${query}` : ''}`;
 }
 
-/** The shareable summary of a finished game. */
-export function shareText(result, { title, url }) {
+/** The shareable summary of a finished game; `daily` adds the board number and standing. */
+export function shareText(result, { title, url, daily = null }) {
     if (result.players === 2) {
         const [p1, p2] = result.playerScores;
         const outcome = p1 === p2 ? "It's a tie" : `Player ${p1 > p2 ? 1 : 2} wins`;
@@ -23,5 +23,9 @@ export function shareText(result, { title, url }) {
     const stars = '⭐'.repeat(result.stars) + '☆'.repeat(3 - result.stars);
     const minutes = Math.floor(result.seconds / 60);
     const time = `${minutes}:${String(result.seconds % 60).padStart(2, '0')}`;
+    if (daily) {
+        const name = title.replace(/\s*Game$/, '');
+        return `${name} #${daily.number} · ${result.label} · ${'⭐'.repeat(result.stars)} · ${result.moves} turns · ${time}\n${daily.line}\n${url}`;
+    }
     return `${title} · ${board} · ${result.label}\n${stars} ${result.moves} turns in ${time}\n${url}`;
 }

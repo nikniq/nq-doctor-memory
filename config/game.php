@@ -115,4 +115,10 @@ return [
 
     'implausible_odds' => 1e-6,
 
+    /*
+    | Daily challenge numbers count from this date (#1).
+    */
+
+    'daily_epoch' => env('GAME_DAILY_EPOCH', '2026-10-01'),
+
 ];

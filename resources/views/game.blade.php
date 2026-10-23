@@ -18,6 +18,7 @@
         data-initial-mode="{{ $initialMode }}"
         data-initial-grid="{{ $initialGrid }}"
         data-scores-url="{{ route('scores.index') }}"
+        data-daily-stats-url="{{ route('daily.stats') }}"
         data-store-url="{{ route('scores.store') }}"
     >
         <div class="game__wrap">
@@ -135,6 +136,10 @@
             <p id="winSummary" class="win__summary"></p>
             <p id="winRecord" class="win__record" hidden>New personal best!</p>
             <p id="winShort" class="win__summary" hidden></p>
+            <div id="dailyResult" class="daily-result" hidden>
+                <p id="dailyRank" class="daily-result__rank"></p>
+                <div id="dailyChart" class="daily-chart" role="img" aria-label=""></div>
+            </div>
             <p id="unrankedNotice" class="win__note" hidden></p>
             @guest
                 <p class="win__note win__note--guest"><a href="{{ route('register') }}">Register</a> to save your games and join the player rankings.</p>

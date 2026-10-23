@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Game;
+use App\Support\Daily;
 use App\Support\TurnOdds;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -143,11 +144,39 @@ class GameSessionController extends Controller
         return response()->json([
             'turns' => $game->turns,
             'seconds' => $game->seconds,
+            'daily' => $this->dailyStanding($game),
             'ranked' => $game->isRanked(),
             'reason' => $game->unranked_reason,
             'message' => $game->unrankedMessage(),
             'scorable' => $game->players === 1 && $game->isRanked(),
         ]);
+    }
+
+    /**
+     * Where a ranked solo daily game stands among today's players on that
+     * board: how many there are (including this one) and how many it beat.
+     *
+     * @return array{number: int, players: int, beaten: int}|null
+     */
+    private function dailyStanding(Game $game): ?array
+    {
+        if (! $game->isDaily() || $game->players !== 1 || ! $game->isRanked()) {
+            return null;
+        }
+
+        $date = $game->played_on->toDateString();
+        $board = fn () => Daily::rankedGames($date, $game->difficulty);
+
+        return [
+            'number' => Daily::number($date),
+            'players' => $board()->count(),
+            'beaten' => $board()
+                ->whereKeyNot($game->id)
+                ->where(fn ($query) => $query
+                    ->where('turns', '>', $game->turns)
+                    ->orWhere(fn ($tie) => $tie->where('turns', $game->turns)->where('seconds', '>', $game->seconds)))
+                ->count(),
+        ];
     }
 
     /**
