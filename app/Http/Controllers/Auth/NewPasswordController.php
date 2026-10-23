@@ -8,6 +8,7 @@ use Illuminate\Auth\Events\PasswordReset;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rules;
@@ -26,6 +27,8 @@ class NewPasswordController extends Controller
      */
     public function store(Request $request): RedirectResponse
     {
+        $request->merge(['email' => Str::lower(trim((string) $request->input('email')))]);
+
         $request->validate([
             'token' => ['required'],
             'email' => ['required', 'email'],
@@ -40,6 +43,9 @@ class NewPasswordController extends Controller
                     'remember_token' => Str::random(60),
                     'email_verified_at' => $user->email_verified_at ?? now(),
                 ])->save();
+
+                // Whoever was signed in before the reset is signed out everywhere.
+                DB::table(config('session.table', 'sessions'))->where('user_id', $user->id)->delete();
 
                 event(new PasswordReset($user));
             },

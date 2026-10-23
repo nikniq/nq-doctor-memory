@@ -17,6 +17,14 @@ class LoginRequest extends FormRequest
     private const MAX_ATTEMPTS = 5;
 
     /**
+     * Emails are stored lowercased, and SQLite compares strings case-sensitively.
+     */
+    protected function prepareForValidation(): void
+    {
+        $this->merge(['email' => Str::lower(trim((string) $this->input('email')))]);
+    }
+
+    /**
      * @return array<string, array<int, string>>
      */
     public function rules(): array

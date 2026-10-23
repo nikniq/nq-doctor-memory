@@ -55,4 +55,18 @@ class RegistrationTest extends TestCase
     {
         $this->actingAs(User::factory()->create())->get('/register')->assertRedirect('/');
     }
+
+    public function test_the_email_is_stored_lowercased(): void
+    {
+        Notification::fake();
+
+        $this->post('/register', [
+            'name' => 'Grey',
+            'email' => 'Meredith@Example.COM',
+            'password' => 'secret123',
+            'password_confirmation' => 'secret123',
+        ]);
+
+        $this->assertDatabaseHas('users', ['email' => 'meredith@example.com']);
+    }
 }

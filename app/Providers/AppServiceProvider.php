@@ -29,13 +29,24 @@ class AppServiceProvider extends ServiceProvider
             ? Password::min(8)->letters()->numbers()->uncompromised()
             : Password::min(8)->letters()->numbers());
 
-        // Anything that sends an email: keyed by IP so one visitor cannot
-        // flood an inbox, with a per-address cap so many IPs cannot either.
+        // Registration and reset emails. The hourly cap is per address AND IP,
+        // so someone spamming an address from elsewhere cannot lock its owner
+        // out; the password broker separately limits reset mails per address.
         RateLimiter::for('auth-email', function (Request $request) {
+            $email = strtolower(trim((string) $request->input('email')));
+
             return [
                 Limit::perMinute(6)->by('ip:'.$request->ip()),
-                Limit::perHour(10)->by('email:'.strtolower((string) ($request->input('email') ?? $request->user()?->email))),
+                Limit::perHour(10)->by('email:'.$request->ip().'|'.$email),
             ];
+        });
+
+        // Resending the verification link: only the signed-in account can ask.
+        RateLimiter::for('verification-send', function (Request $request) {
+            $who = $request->user()?->id ?? $request->ip();
+
+            // Separate keys: limits sharing a key would share one counter.
+            return [Limit::perMinute(6)->by('verify-send-minute:'.$who), Limit::perHour(10)->by('verify-send-hour:'.$who)];
         });
     }
 }

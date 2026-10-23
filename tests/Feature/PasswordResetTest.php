@@ -58,4 +58,42 @@ class PasswordResetTest extends TestCase
 
         $this->assertTrue(Hash::check('password', $user->fresh()->password));
     }
+
+    public function test_a_reset_signs_out_every_earlier_session(): void
+    {
+        config(['session.driver' => 'database']);
+        Notification::fake();
+
+        $register = $this->post('/register', [
+            'name' => 'Squatter',
+            'email' => 'victim@example.com',
+            'password' => 'secret123',
+            'password_confirmation' => 'secret123',
+        ]);
+        $squatterSession = $register->getCookie(config('session.cookie'))->getValue();
+        $this->freshBrowser();
+
+        $user = User::sole();
+        $this->post('/reset-password', [
+            'token' => Password::createToken($user),
+            'email' => 'victim@example.com',
+            'password' => 'owner-pass1',
+            'password_confirmation' => 'owner-pass1',
+        ])->assertRedirect(route('login'));
+        $this->freshBrowser();
+
+        $this->withCookie(config('session.cookie'), $squatterSession)
+            ->get('/account')
+            ->assertRedirect(route('login'));
+    }
+
+    public function test_the_reset_link_is_sent_whatever_the_capitalisation(): void
+    {
+        Notification::fake();
+        $user = User::factory()->create(['email' => 'house@example.com']);
+
+        $this->post('/forgot-password', ['email' => 'House@Example.com']);
+
+        Notification::assertSentTo($user, ResetPassword::class);
+    }
 }

@@ -7,14 +7,15 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>{{ isset($pageTitle) ? $pageTitle.' · ' : '' }}{{ config('game.title') }}</title>
 
-    @if ($gaId = config('services.google_analytics.measurement_id'))
+    {{-- Never on pages whose URLs carry tokens or personal data. --}}
+    @if (($gaId = config('services.google_analytics.measurement_id')) && ! request()->routeIs('password.reset', 'password.request', 'login', 'register', 'verification.*'))
         <!-- Google tag (gtag.js) -->
         <script async src="https://www.googletagmanager.com/gtag/js?id={{ $gaId }}"></script>
         <script>
             window.dataLayer = window.dataLayer || [];
             function gtag(){dataLayer.push(arguments);}
             gtag('js', new Date());
-            gtag('config', @js($gaId));
+            gtag('config', @js($gaId), { page_location: location.origin + location.pathname });
         </script>
     @endif
 

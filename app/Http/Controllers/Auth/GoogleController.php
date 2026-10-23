@@ -3,9 +3,11 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
+use App\Models\Game;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Laravel\Socialite\Contracts\User as SocialiteUser;
 use Laravel\Socialite\Facades\Socialite;
@@ -46,6 +48,16 @@ class GoogleController extends Controller
         return redirect()->intended(route('game'));
     }
 
+    /**
+     * Sign out whoever registered this unverified account and drop what they
+     * recorded under it.
+     */
+    private function endEarlierClaim(User $user): void
+    {
+        DB::table(config('session.table', 'sessions'))->where('user_id', $user->id)->delete();
+        Game::where('user_id', $user->id)->update(['user_id' => null]);
+    }
+
     public static function isConfigured(): bool
     {
         return filled(config('services.google.client_id')) && filled(config('services.google.client_secret'));
@@ -56,9 +68,10 @@ class GoogleController extends Controller
      * so the account is marked verified.
      *
      * When an existing account was never verified, nobody proved they owned
-     * that address, so its password is cleared before linking. Otherwise
-     * someone could pre-register a victim's email and keep a way in after
-     * the real owner signs in with Google.
+     * that address. Someone could have pre-registered a victim's email, so
+     * before linking: the password is cleared, the name is replaced with the
+     * Google name, every existing session is ended and games recorded before
+     * verification are detached. The owner's own session starts afterwards.
      */
     private function findOrCreateUser(SocialiteUser $googleUser): User
     {
@@ -75,7 +88,12 @@ class GoogleController extends Controller
                 'password' => null,
             ]);
         } elseif (! $user->hasVerifiedEmail()) {
-            $user->forceFill(['password' => null]);
+            $user->forceFill([
+                'name' => Str::limit($googleUser->getName() ?: Str::before($email, '@'), 24, ''),
+                'password' => null,
+                'remember_token' => Str::random(60),
+            ]);
+            $this->endEarlierClaim($user);
         }
 
         $user->forceFill([

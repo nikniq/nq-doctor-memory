@@ -60,4 +60,13 @@ class LoginTest extends TestCase
             ->assertSessionHasErrors('email');
         $this->assertGuest();
     }
+
+    public function test_the_email_is_not_case_sensitive(): void
+    {
+        $user = User::factory()->create(['email' => 'house@example.com']);
+
+        $this->post('/login', ['email' => ' House@Example.com ', 'password' => 'password']);
+
+        $this->assertAuthenticatedAs($user);
+    }
 }

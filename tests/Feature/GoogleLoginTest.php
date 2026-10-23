@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Game;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Socialite\Facades\Socialite;
@@ -99,5 +100,33 @@ class GoogleLoginTest extends TestCase
     public function test_the_login_page_offers_google_when_configured(): void
     {
         $this->get('/login')->assertSee('Continue with Google');
+    }
+
+    public function test_linking_signs_out_whoever_registered_the_address_first(): void
+    {
+        config(['session.driver' => 'database']);
+
+        $register = $this->post('/register', [
+            'name' => 'Squatter',
+            'email' => 'meredith@example.com',
+            'password' => 'secret123',
+            'password_confirmation' => 'secret123',
+        ]);
+        $squatterSession = $register->getCookie(config('session.cookie'))->getValue();
+        $squatter = User::sole();
+        $earlierGame = Game::factory()->for($squatter)->finished()->create();
+        $this->freshBrowser();
+
+        $this->fakeGoogle();
+        $this->get('/auth/google/callback')->assertRedirect(route('game'));
+        $owner = $squatter->fresh();
+        $this->freshBrowser();
+
+        $this->withCookie(config('session.cookie'), $squatterSession)
+            ->get('/account')
+            ->assertRedirect(route('login'));
+
+        $this->assertSame('Meredith Grey', $owner->name);
+        $this->assertNull($earlierGame->fresh()->user_id);
     }
 }
