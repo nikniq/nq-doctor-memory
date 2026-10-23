@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { dealBoard, hashString, seededRandom, shuffle } from '../../resources/js/game/random.js';
-import { formatTime, isBetter, starsFor } from '../../resources/js/game/scoring.js';
+import { formatTime, isBetter, nextGrid, starsFor, starTarget } from '../../resources/js/game/scoring.js';
 import { currentStreak, nextStreak, yesterdayOf } from '../../resources/js/game/streak.js';
 import { nextIndex } from '../../resources/js/game/grid.js';
 import { formatCountdown, msUntil } from '../../resources/js/game/daily.js';
@@ -181,5 +181,43 @@ describe('daily countdown', () => {
         expect(formatCountdown(5 * 3600000 + 12 * 60000)).toBe('5h 12m');
         expect(formatCountdown(12 * 60000 + 59000)).toBe('12m');
         expect(formatCountdown(30000)).toBe('under a minute');
+    });
+});
+
+describe('star targets', () => {
+    const grids = {
+        '4x3': { 3: 10, 2: 13 },
+        '4x4': { 3: 13, 2: 18 },
+        '5x4': { 3: 16, 2: 22 },
+        '6x4': { 3: 19, 2: 27 },
+        '6x5': { 3: 24, 2: 33 },
+        '6x6': { 3: 29, 2: 40 },
+    };
+
+    it.each(Object.entries(grids))('awards stars at the %s boundaries', (grid, cuts) => {
+        expect(starsFor(cuts[3], cuts)).toBe(3);
+        expect(starsFor(cuts[3] + 1, cuts)).toBe(2);
+        expect(starsFor(cuts[2], cuts)).toBe(2);
+        expect(starsFor(cuts[2] + 1, cuts)).toBe(1);
+    });
+
+    it('says how many turns keep the current stars', () => {
+        const cuts = grids['4x4'];
+        expect(starTarget(0, cuts)).toEqual({ stars: 3, turnsLeft: 13 });
+        expect(starTarget(13, cuts)).toEqual({ stars: 3, turnsLeft: 0 });
+        expect(starTarget(14, cuts)).toEqual({ stars: 2, turnsLeft: 4 });
+        expect(starTarget(19, cuts)).toBeNull();
+    });
+
+    it('suggests the next grid up, and nothing after the last', () => {
+        const keys = Object.keys(grids);
+        expect(nextGrid(keys, '4x4')).toBe('5x4');
+        expect(nextGrid(keys, '6x6')).toBeNull();
+        expect(nextGrid(keys, 'nope')).toBeNull();
+    });
+
+    it('still accepts a pair count', () => {
+        expect(starsFor(12, 8)).toBe(3);
+        expect(starsFor(18, 8)).toBe(2);
     });
 });

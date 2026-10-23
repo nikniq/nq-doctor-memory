@@ -75,18 +75,20 @@ return [
     | "columns x rows" and are stored with games and scores, so renaming one
     | needs a data migration. 'columns_narrow' is the column count on phones.
     | 'pairs' must equal columns * rows / 2 and may not exceed the cards.
+    | 'stars' are the most turns for 3 and 2 stars (more turns: 1 star). The
+    | 3-star cut is about what a player with perfect memory needs half the time.
     |
     */
 
     'default_difficulty' => '4x4',
 
     'difficulties' => [
-        '4x3' => ['label' => '4 × 3', 'pairs' => 6, 'columns' => 4, 'columns_narrow' => 3],
-        '4x4' => ['label' => '4 × 4', 'pairs' => 8, 'columns' => 4, 'columns_narrow' => 4],
-        '5x4' => ['label' => '5 × 4', 'pairs' => 10, 'columns' => 5, 'columns_narrow' => 4],
-        '6x4' => ['label' => '6 × 4', 'pairs' => 12, 'columns' => 6, 'columns_narrow' => 4],
-        '6x5' => ['label' => '6 × 5', 'pairs' => 15, 'columns' => 6, 'columns_narrow' => 5],
-        '6x6' => ['label' => '6 × 6', 'pairs' => 18, 'columns' => 6, 'columns_narrow' => 6],
+        '4x3' => ['label' => '4 × 3', 'pairs' => 6, 'columns' => 4, 'columns_narrow' => 3, 'stars' => [3 => 10, 2 => 13]],
+        '4x4' => ['label' => '4 × 4', 'pairs' => 8, 'columns' => 4, 'columns_narrow' => 4, 'stars' => [3 => 13, 2 => 18]],
+        '5x4' => ['label' => '5 × 4', 'pairs' => 10, 'columns' => 5, 'columns_narrow' => 4, 'stars' => [3 => 16, 2 => 22]],
+        '6x4' => ['label' => '6 × 4', 'pairs' => 12, 'columns' => 6, 'columns_narrow' => 4, 'stars' => [3 => 19, 2 => 27]],
+        '6x5' => ['label' => '6 × 5', 'pairs' => 15, 'columns' => 6, 'columns_narrow' => 5, 'stars' => [3 => 24, 2 => 33]],
+        '6x6' => ['label' => '6 × 6', 'pairs' => 18, 'columns' => 6, 'columns_narrow' => 6, 'stars' => [3 => 29, 2 => 40]],
     ],
 
     /*

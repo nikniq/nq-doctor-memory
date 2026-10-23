@@ -14,7 +14,7 @@
 
 import { currentStreak, nextStreak } from './game/streak.js';
 import { dealBoard, hashString, seededRandom } from './game/random.js';
-import { formatTime, isBetter, starsFor } from './game/scoring.js';
+import { formatTime, isBetter, nextGrid, starsFor, starTarget } from './game/scoring.js';
 import { nextIndex } from './game/grid.js';
 import { CONNECTIVITY_MESSAGE, dailyDateChanged, requestError } from './game/session.js';
 import { cardLabel, turnMessage, winMessage } from './game/announce.js';
@@ -83,6 +83,10 @@ if (app) {
         factIcon: document.getElementById('factIcon'),
         factText: document.getElementById('factText'),
         announcer: document.getElementById('announcer'),
+        starMeter: document.getElementById('starMeter'),
+        introLine: document.getElementById('introLine'),
+        winShort: document.getElementById('winShort'),
+        nextGridBtn: document.getElementById('nextGridBtn'),
     };
 
     const defaultDifficulty = difficulties[app.dataset.defaultDifficulty] ? app.dataset.defaultDifficulty : Object.keys(difficulties)[0];
@@ -203,6 +207,10 @@ if (app) {
             { freq: 880, at: 0.1, length: 0.18 },
         ]),
         miss: () => playTone([{ freq: 220, at: 0, length: 0.2, type: 'sawtooth', gain: 0.04 }]),
+        drop: () => playTone([
+            { freq: 392, at: 0.25, length: 0.12, gain: 0.04 },
+            { freq: 330, at: 0.37, length: 0.18, gain: 0.04 },
+        ]),
         win: () => playTone([
             { freq: 523, at: 0, length: 0.15 },
             { freq: 659, at: 0.15, length: 0.15 },
@@ -439,8 +447,11 @@ if (app) {
 
         if (flipped.length === 2) {
             canFlip = false;
+            const starsBefore = level().stars ? starsFor(moves, level().stars) : 3;
             moves++;
             el.moves.textContent = moves;
+            renderStarMeter();
+            if (level().stars && starsFor(moves, level().stars) < starsBefore) sounds.drop();
             checkForMatch();
         }
     }
@@ -634,11 +645,30 @@ if (app) {
         el.modes.forEach((button) => button.setAttribute('aria-pressed', String(button.dataset.mode === mode)));
         el.modeHint.hidden = mode !== 'daily';
         renderPracticeNotice();
+        renderStarMeter();
+        renderIntro();
         el.players.value = String(playerCount);
         el.bestStat.hidden = playerCount === 2;
         renderPlayers();
         renderStreak();
         renderBest();
+    }
+
+    function renderStarMeter() {
+        if (!el.starMeter) return;
+        const cuts = level().stars;
+        if (!cuts || playerCount === 2) {
+            el.starMeter.textContent = '';
+            return;
+        }
+        const target = starTarget(moves, cuts);
+        el.starMeter.textContent = target
+            ? `${'⭐'.repeat(target.stars)} ${target.turnsLeft === 0 ? 'last turn' : `${target.turnsLeft} left`}`
+            : '⭐';
+    }
+
+    function renderIntro() {
+        if (el.introLine) el.introLine.hidden = readStorage('intro-seen') === '1';
     }
 
     function renderPracticeNotice() {
@@ -681,7 +711,8 @@ if (app) {
         return {
             moves,
             seconds: Math.max(elapsed, 1),
-            stars: starsFor(moves, level().pairs),
+            stars: starsFor(moves, level().stars ?? level().pairs),
+            cuts: level().stars ?? null,
             difficulty,
             label: level().label,
             pairs: level().pairs,
@@ -723,6 +754,19 @@ if (app) {
         el.winStars.setAttribute('aria-label', `${result.stars} of 3 stars`);
         el.winSummary.textContent = `${result.mode === 'daily' ? 'Daily challenge' : 'Free play'} · ${result.label} · ${result.moves} turns in ${formatTime(result.seconds)}`;
         el.winRecord.hidden = !record;
+        writeStorage('intro-seen', '1');
+        renderIntro();
+        const short = result.cuts && result.stars < 3 ? result.moves - result.cuts[3] : null;
+        if (el.winShort) {
+            el.winShort.hidden = !(short !== null && short <= 2);
+            el.winShort.textContent = short !== null ? `${short} turn${short === 1 ? '' : 's'} short of 3 stars` : '';
+        }
+        const upNext = result.stars === 3 && result.mode === 'free' ? nextGrid(Object.keys(difficulties), result.difficulty) : null;
+        if (el.nextGridBtn) {
+            el.nextGridBtn.hidden = !upNext;
+            el.nextGridBtn.dataset.grid = upNext ?? '';
+            el.nextGridBtn.textContent = upNext ? `Try ${difficulties[upNext].label}` : '';
+        }
         if (el.winSaved) el.winSaved.hidden = !savedToAccount;
         el.scoreError.hidden = true;
         el.scoreForm.hidden = false;
@@ -788,6 +832,8 @@ if (app) {
         if (el.winSaved) el.winSaved.hidden = true;
         if (el.signedOut) el.signedOut.hidden = true;
         if (el.unrankedNotice) el.unrankedNotice.hidden = true;
+        if (el.winShort) el.winShort.hidden = true;
+        if (el.nextGridBtn) el.nextGridBtn.hidden = true;
         el.scoreForm.hidden = true;
         el.scoreError.hidden = true;
         el.share.textContent = 'Share result';
@@ -1016,6 +1062,15 @@ if (app) {
     window.matchMedia?.('(max-width: 640px)').addEventListener?.('change', relabelCards);
     el.reset.addEventListener('click', newGame);
     el.playAgain.addEventListener('click', newGame);
+    el.nextGridBtn?.addEventListener('click', () => {
+        const grid = el.nextGridBtn.dataset.grid;
+        if (!difficulties[grid]) return;
+        difficulty = grid;
+        el.difficulty.value = grid;
+        writeStorage('difficulty', grid);
+        newGame();
+        loadLeaderboard();
+    });
     el.share.addEventListener('click', shareResult);
     el.scoreForm.addEventListener('submit', submitScore);
     el.dialog.addEventListener('cancel', (event) => {

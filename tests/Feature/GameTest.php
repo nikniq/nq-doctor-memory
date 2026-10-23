@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class GameTest extends TestCase
@@ -48,5 +49,29 @@ class GameTest extends TestCase
         $this->assertMatchesRegularExpression('/id="announcer"[^>]*aria-live="polite"/', $html);
         $this->assertDoesNotMatchRegularExpression('/id="fact"[^>]*role="status"/', $html);
         $this->assertDoesNotMatchRegularExpression('/id="playersBar"[^>]*role="status"/', $html);
+    }
+
+    /**
+     * @return array<string, array{0: string}>
+     */
+    public static function grids(): array
+    {
+        return collect((require __DIR__.'/../../config/game.php')['difficulties'])
+            ->keys()
+            ->mapWithKeys(fn (string $grid) => [$grid => [$grid]])
+            ->all();
+    }
+
+    #[DataProvider('grids')]
+    public function test_each_grid_has_sensible_star_cuts_on_the_page(string $grid): void
+    {
+        $settings = config("game.difficulties.{$grid}");
+
+        $this->assertGreaterThanOrEqual($settings['pairs'], $settings['stars'][3]);
+        $this->assertLessThan($settings['stars'][2], $settings['stars'][3]);
+
+        $html = $this->get('/')->getContent();
+        preg_match("/data-difficulties='([^']*)'/", $html, $match);
+        $this->assertSame($settings['stars'][3], json_decode(html_entity_decode($match[1]), true)[$grid]['stars'][3]);
     }
 }

@@ -66,7 +66,7 @@
                 </div>
 
                 <p id="modeHint" class="game__hint">
-                    Everyone gets the same board today. Beat the clock and the leaderboard.
+                    Same board for everyone today. Fewest turns wins.
                     <span id="streak" class="game__streak" hidden></span>
                 </p>
                 <p id="practiceNotice" class="game__hint" hidden></p>
@@ -90,7 +90,10 @@
                     </div>
                     <div class="game__stat">
                         <dt>Turns</dt>
-                        <dd id="moves">0</dd>
+                        <dd>
+                            <span id="moves">0</span>
+                            <span id="starMeter" class="stat__meter" aria-hidden="true"></span>
+                        </dd>
                     </div>
                     <div class="game__stat">
                         <dt>Time</dt>
@@ -106,6 +109,7 @@
             <main class="game__main">
                 <p id="boardHelp" class="sr-only">Use the arrow keys to move between cards, Home and End to jump to the first and last card, and Enter or Space to flip one. Each turn's result is read out.</p>
                 <p id="announcer" class="sr-only" aria-live="polite" aria-atomic="true"></p>
+                <p id="introLine" class="game__intro" hidden>Find every pair in as few turns as you can. A turn is two flips; time only breaks ties.</p>
                 <div id="gameBoard" class="game__board" role="group" aria-label="Memory cards" aria-describedby="boardHelp"></div>
 
                 <section class="leaderboard" aria-labelledby="leaderboardTitle">
@@ -126,6 +130,7 @@
             <div id="winStars" class="win__stars" role="img" aria-label=""></div>
             <p id="winSummary" class="win__summary"></p>
             <p id="winRecord" class="win__record" hidden>New personal best!</p>
+            <p id="winShort" class="win__summary" hidden></p>
             <p id="unrankedNotice" class="win__note" hidden></p>
             <p id="winSaved" class="win__saved" hidden>
                 @auth
@@ -153,6 +158,7 @@
 
             <div class="win__actions">
                 <button type="button" id="shareBtn" class="game__button game__button--secondary">Share result</button>
+                <button type="button" id="nextGridBtn" class="game__button game__button--secondary" hidden></button>
                 <button type="button" id="playAgainBtn" class="game__button">Play Again</button>
             </div>
         </dialog>

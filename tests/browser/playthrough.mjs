@@ -160,6 +160,8 @@ try {
         const boardText = await page.textContent('#gameBoard');
         check(!allNames.some((n) => boardText.includes(n)), 'face-down cards reveal nothing in the page');
         check((await page.getAttribute('.card[data-card-id="0"]', 'aria-label')).startsWith('Row 1, column 1'), 'cards are labelled by row and column');
+        check((await page.textContent('#starMeter')).trim() === '⭐⭐⭐ 10 left', 'star meter shows the 3-star target before play');
+        check(await page.isVisible('#introLine'), 'first-time players see how scoring works');
     }
     const boardBottom = await page.$eval('#gameBoard', (b) => b.getBoundingClientRect().bottom);
     check(boardBottom <= 900, `easy board fits a 900px-high window (bottom at ${Math.round(boardBottom)}px)`);
@@ -196,6 +198,7 @@ try {
     check(!(await page.$('#winDialog[open]')), 'escape closes the win dialog');
     check(await page.isHidden('#winSaved'), 'guests are not told the game was saved');
     check(await page.textContent('#moves') === '0', 'new game resets moves');
+    check(await page.isHidden('#introLine'), 'the scoring line goes away after the first win');
     check((await page.textContent('#practiceNotice')).includes('Replays are practice') && await page.isVisible('#practiceNotice'), 'replaying the daily board is marked as practice, with a countdown');
 
     // Daily boards are identical across reloads.

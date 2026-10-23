@@ -114,7 +114,7 @@
 /* On larger screens size the board so every row fits without scrolling. */
 @media (min-width: 641px) {
     .game__board {
-        width: min(100%, max(24em, calc((100dvh - 20em) / var(--rows, 4) * 0.75 * var(--columns))));
+        width: min(100%, max(24em, calc((100dvh - 22em) / var(--rows, 4) * 0.75 * var(--columns))));
         margin-inline: auto;
     }
 }
@@ -1159,5 +1159,39 @@
 }
 
 .win__note[hidden] {
+    display: none;
+}
+
+/* Star meter under the turn count: how many turns keep the current stars. */
+.stat__meter {
+    display: inline;
+    margin-left: 0.35em;
+    font-size: 0.7em;
+    font-weight: normal;
+    white-space: nowrap;
+    opacity: 0.85;
+}
+
+.stat__meter:empty {
+    display: none;
+}
+
+@media (max-width: 640px) {
+    .stat__meter {
+        display: block;
+        margin-left: 0;
+    }
+}
+
+.game__intro {
+    margin: -0.5em auto 0.75em;
+    max-width: 44em;
+    font-size: 0.9em;
+    text-align: center;
+    opacity: 0.9;
+}
+
+.game__intro[hidden],
+#winShort[hidden] {
     display: none;
 }
