@@ -35,6 +35,8 @@ if (app) {
     // Grids whose daily board this player has started today: replays are practice.
     const dailyPlayed = new Set(JSON.parse(app.dataset.dailyPlayed || '[]'));
     const startedThisDeal = new Set();
+    // Signed-in players' bests from the server, merged with this browser's.
+    const accountBests = JSON.parse(app.dataset.accountBests || '{}');
     const scoresUrl = app.dataset.scoresUrl;
     const dailyStatsUrl = app.dataset.dailyStatsUrl;
     const storeUrl = app.dataset.storeUrl;
@@ -172,12 +174,16 @@ if (app) {
     }
 
     function readBest(key = bestKey()) {
+        let local = null;
         try {
             const raw = readStorage(key);
-            return raw ? JSON.parse(raw) : null;
+            local = raw ? JSON.parse(raw) : null;
         } catch {
-            return null;
+            local = null;
         }
+        const server = accountBests[key] ?? null;
+        if (!server) return local;
+        return !local || isBetter(server, local) ? server : local;
     }
 
     function level() {

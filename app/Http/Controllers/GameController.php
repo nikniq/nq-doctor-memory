@@ -28,12 +28,45 @@ class GameController extends Controller
             'gamesUrl' => route('games.store'),
             'playerName' => $user?->hasVerifiedEmail() ? $user->name : null,
             'dailyPlayed' => $this->dailyGridsStarted($request),
+            'accountBests' => $this->accountBests($request),
             // Deep links (?mode=daily&grid=6x6) from shared results; bad values are ignored.
             'initialMode' => in_array($request->query('mode'), ['daily', 'free'], true) ? $request->query('mode') : null,
             'initialGrid' => is_string($request->query('grid')) && array_key_exists($request->query('grid'), config('game.difficulties'))
                 ? $request->query('grid')
                 : null,
         ]);
+    }
+
+    /**
+     * A verified player's best ranked solo game per board, so "Your best"
+     * follows them across devices. Keys match the page's local-storage keys:
+     * "best:<grid>" for free play, "best:daily:<date>:<grid>" for today's daily.
+     *
+     * @return array<string, array{moves: int, seconds: int}>
+     */
+    private function accountBests(Request $request): array
+    {
+        $user = $request->user();
+        if (! $user?->hasVerifiedEmail()) {
+            return [];
+        }
+
+        $today = now()->toDateString();
+
+        return $user->games()
+            ->finished()
+            ->ranked()
+            ->where('players', 1)
+            ->where(fn ($query) => $query->whereNull('played_on')->orWhereDate('played_on', $today))
+            ->orderBy('turns')
+            ->orderBy('seconds')
+            ->get(['difficulty', 'played_on', 'turns', 'seconds'])
+            ->reduce(function (array $bests, $game) {
+                $key = $game->played_on ? "best:daily:{$game->played_on->toDateString()}:{$game->difficulty}" : "best:{$game->difficulty}";
+                $bests[$key] ??= ['moves' => $game->turns, 'seconds' => $game->seconds];
+
+                return $bests;
+            }, []);
     }
 
     /**
