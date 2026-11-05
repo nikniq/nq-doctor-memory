@@ -37,6 +37,7 @@ if (app) {
     const startedThisDeal = new Set();
     // Signed-in players' bests from the server, merged with this browser's.
     const accountBests = JSON.parse(app.dataset.accountBests || '{}');
+    const accountStreak = JSON.parse(app.dataset.accountStreak || 'null');
     const scoresUrl = app.dataset.scoresUrl;
     const dailyStatsUrl = app.dataset.dailyStatsUrl;
     const storeUrl = app.dataset.storeUrl;
@@ -307,12 +308,17 @@ if (app) {
     // --- Daily streak ----------------------------------------------------
 
     function readStreak() {
+        let local;
         try {
             const raw = readStorage('daily:streak');
-            return raw ? JSON.parse(raw) : { last: null, count: 0 };
+            local = raw ? JSON.parse(raw) : { last: null, count: 0 };
         } catch {
-            return { last: null, count: 0 };
+            local = { last: null, count: 0 };
         }
+        // Signed-in players: whichever record is still alive and longer wins.
+        if (!accountStreak) return local;
+        const alive = (s) => currentStreak(s, today);
+        return alive(accountStreak) >= alive(local) ? accountStreak : local;
     }
 
     function recordDailyWin(day) {

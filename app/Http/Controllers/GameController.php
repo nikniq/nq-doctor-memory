@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Game;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 
 class GameController extends Controller
 {
@@ -29,6 +30,7 @@ class GameController extends Controller
             'playerName' => $user?->hasVerifiedEmail() ? $user->name : null,
             'dailyPlayed' => $this->dailyGridsStarted($request),
             'accountBests' => $this->accountBests($request),
+            'accountStreak' => $this->accountStreak($request),
             // Deep links (?mode=daily&grid=6x6) from shared results; bad values are ignored.
             'initialMode' => in_array($request->query('mode'), ['daily', 'free'], true) ? $request->query('mode') : null,
             'initialGrid' => is_string($request->query('grid')) && array_key_exists($request->query('grid'), config('game.difficulties'))
@@ -67,6 +69,43 @@ class GameController extends Controller
 
                 return $bests;
             }, []);
+    }
+
+    /**
+     * A verified player's daily streak from their finished solo daily games:
+     * the most recent day played and how many days in a row led up to it.
+     *
+     * @return array{last: string, count: int}|null
+     */
+    private function accountStreak(Request $request): ?array
+    {
+        $user = $request->user();
+        if (! $user?->hasVerifiedEmail()) {
+            return null;
+        }
+
+        $days = $user->games()
+            ->finished()
+            ->where('players', 1)
+            ->whereNotNull('played_on')
+            ->whereDate('played_on', '>=', now()->subDays(400)->toDateString())
+            ->orderByDesc('played_on')
+            ->pluck('played_on')
+            ->map(fn ($day) => $day->toDateString())
+            ->unique()
+            ->values();
+
+        if ($days->isEmpty()) {
+            return null;
+        }
+
+        $count = 1;
+        while ($count < $days->count()
+            && $days[$count] === Carbon::parse($days[$count - 1])->subDay()->toDateString()) {
+            $count++;
+        }
+
+        return ['last' => $days[0], 'count' => $count];
     }
 
     /**
