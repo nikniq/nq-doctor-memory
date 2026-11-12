@@ -5,6 +5,7 @@ import { currentStreak, nextStreak, yesterdayOf } from '../../resources/js/game/
 import { nextIndex } from '../../resources/js/game/grid.js';
 import { barHeights, formatCountdown, msUntil, percentileText } from '../../resources/js/game/daily.js';
 import { shareText, shareUrl } from '../../resources/js/game/share.js';
+import { createMemoryTracker, memoryReport, recordTurn } from '../../resources/js/game/memory.js';
 import { cardLabel, positionOf, turnMessage, winMessage } from '../../resources/js/game/announce.js';
 import { CONNECTIVITY_MESSAGE, dailyDateChanged, firstErrorMessage, requestError } from '../../resources/js/game/session.js';
 
@@ -256,5 +257,33 @@ describe('daily results', () => {
         const result = { players: 1, mode: 'daily', today: '2026-10-23', label: '4 × 4', stars: 2, moves: 14, seconds: 62 };
         expect(shareText(result, { title: 'Doctor Memory Game', url: 'https://x/', daily: { number: 23, line: 'Better than 68% of 41 players today' } }))
             .toBe('Doctor Memory #23 · 4 × 4 · ⭐⭐ · 14 turns · 1:02\nBetter than 68% of 41 players today\nhttps://x/');
+    });
+});
+
+describe('memory feedback', () => {
+    const card = (uniqueId, id) => ({ uniqueId, id });
+
+    it('counts streaks of matches and keeps the best', () => {
+        const t = createMemoryTracker();
+        recordTurn(t, card(0, 1), card(1, 1));
+        recordTurn(t, card(2, 2), card(3, 2));
+        recordTurn(t, card(4, 3), card(6, 4));
+        recordTurn(t, card(5, 3), card(4, 3));
+        expect(t.streak).toBe(1);
+        expect(t.bestStreak).toBe(2);
+    });
+
+    it("counts a slip only when the first card's twin was already seen", () => {
+        const t = createMemoryTracker();
+        recordTurn(t, card(0, 1), card(1, 2)); // first sightings: no slip
+        recordTurn(t, card(2, 1), card(3, 3)); // twin of id 1 was seen at 0: slip
+        recordTurn(t, card(4, 4), card(5, 5)); // nothing seen before: no slip
+        expect(t.slips).toBe(1);
+    });
+
+    it('reports in plain words', () => {
+        expect(memoryReport({ bestStreak: 4, slips: 2 })).toBe('Best streak 4 · 2 memory slips');
+        expect(memoryReport({ bestStreak: 1, slips: 1 })).toBe('Best streak 1 · 1 memory slip');
+        expect(memoryReport({ bestStreak: 6, slips: 0 })).toBe('Best streak 6 · no memory slips');
     });
 });

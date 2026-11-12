@@ -100,6 +100,7 @@
                         <dd>
                             <span id="moves">0</span>
                             <span id="starMeter" class="stat__meter" aria-hidden="true"></span>
+                            <span id="streakBadge" class="streak-badge" aria-hidden="true" hidden></span>
                         </dd>
                     </div>
                     <div class="game__stat">
@@ -138,6 +139,7 @@
             <p id="winSummary" class="win__summary"></p>
             <p id="winRecord" class="win__record" hidden>New personal best!</p>
             <p id="winShort" class="win__summary" hidden></p>
+            <p id="winMemory" class="win__summary" hidden></p>
             <div id="dailyResult" class="daily-result" hidden>
                 <p id="dailyRank" class="daily-result__rank"></p>
                 <div id="dailyChart" class="daily-chart" role="img" aria-label=""></div>

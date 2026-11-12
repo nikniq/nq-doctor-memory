@@ -20,6 +20,7 @@ import { CONNECTIVITY_MESSAGE, dailyDateChanged, requestError } from './game/ses
 import { cardLabel, turnMessage, winMessage } from './game/announce.js';
 import { barHeights, formatCountdown, msUntil, percentileText } from './game/daily.js';
 import { shareText as summarise, shareUrl } from './game/share.js';
+import { createMemoryTracker, memoryReport, recordTurn } from './game/memory.js';
 
 const app = document.getElementById('app');
 
@@ -92,6 +93,8 @@ if (app) {
         factText: document.getElementById('factText'),
         announcer: document.getElementById('announcer'),
         starMeter: document.getElementById('starMeter'),
+        streakBadge: document.getElementById('streakBadge'),
+        winMemory: document.getElementById('winMemory'),
         introLine: document.getElementById('introLine'),
         winShort: document.getElementById('winShort'),
         nextGridBtn: document.getElementById('nextGridBtn'),
@@ -120,6 +123,7 @@ if (app) {
     let finishRequest = null; // promise resolving once the server has recorded the finished game
     let savedToAccount = false;
     let finishOutcome = null; // the server's verdict on the finished game
+    let memory = createMemoryTracker();
 
     // Every timer belongs to one deal. A new game bumps the generation and
     // cancels them, so nothing scheduled for the old board touches the new one.
@@ -224,10 +228,14 @@ if (app) {
 
     const sounds = {
         flip: () => playTone([{ freq: 520, at: 0, length: 0.08, type: 'triangle', gain: 0.05 }]),
-        match: () => playTone([
-            { freq: 660, at: 0, length: 0.12 },
-            { freq: 880, at: 0.1, length: 0.18 },
-        ]),
+        // Each match in a row climbs a little higher.
+        match: (streak = 1) => {
+            const lift = 2 ** (Math.min(streak - 1, 6) / 12);
+            playTone([
+                { freq: 660 * lift, at: 0, length: 0.12 },
+                { freq: 880 * lift, at: 0.1, length: 0.18 },
+            ]);
+        },
         miss: () => playTone([{ freq: 220, at: 0, length: 0.2, type: 'sawtooth', gain: 0.04 }]),
         drop: () => playTone([
             { freq: 392, at: 0.25, length: 0.12, gain: 0.04 },
@@ -418,6 +426,8 @@ if (app) {
         finishRequest = null;
         savedToAccount = false;
         finishOutcome = null;
+        memory = createMemoryTracker();
+        if (el.streakBadge) el.streakBadge.hidden = true;
         if (el.dailyResult) el.dailyResult.hidden = true;
         el.dailyChart?.replaceChildren();
         if (el.winSaved) el.winSaved.hidden = true;
@@ -490,6 +500,8 @@ if (app) {
 
     function checkForMatch() {
         const [a, b] = flipped;
+        recordTurn(memory, a, b);
+        renderStreakBadge();
 
         if (a.id === b.id) {
             a.isMatched = true;
@@ -532,7 +544,7 @@ if (app) {
                 vibrate([40, 60, 40, 60, 120]);
                 later(() => showWinDialog(result), 600);
             } else {
-                sounds.match();
+                sounds.match(memory.streak);
                 vibrate(30);
             }
         } else {
@@ -714,6 +726,18 @@ if (app) {
         el.board.style.setProperty('--rows', Math.ceil(cards.length / columns));
     }
 
+    function renderStreakBadge() {
+        if (!el.streakBadge) return;
+        const show = memory.streak >= 2;
+        el.streakBadge.hidden = !show;
+        if (show) {
+            el.streakBadge.textContent = `×${memory.streak} streak!`;
+            el.streakBadge.classList.remove('streak-badge--pop');
+            void el.streakBadge.offsetWidth; // restart the animation
+            el.streakBadge.classList.add('streak-badge--pop');
+        }
+    }
+
     function renderStarMeter() {
         if (!el.starMeter) return;
         const cuts = level().stars;
@@ -821,6 +845,10 @@ if (app) {
         if (el.winShort) {
             el.winShort.hidden = !(short !== null && short <= 2);
             el.winShort.textContent = short !== null ? `${short} turn${short === 1 ? '' : 's'} short of 3 stars` : '';
+        }
+        if (el.winMemory) {
+            el.winMemory.hidden = false;
+            el.winMemory.textContent = memoryReport(memory);
         }
         const upNext = result.stars === 3 && result.mode === 'free' ? nextGrid(Object.keys(difficulties), result.difficulty) : null;
         if (el.nextGridBtn) {

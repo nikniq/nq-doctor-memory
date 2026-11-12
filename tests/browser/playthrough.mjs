@@ -184,6 +184,7 @@ try {
     const centred = Math.abs(box.x + box.width / 2 - 640) < 4 && Math.abs(box.y + box.height / 2 - 450) < 4;
     check(centred, `win dialog is centred (centre at ${Math.round(box.x + box.width / 2)}, ${Math.round(box.y + box.height / 2)})`);
     check((await page.$$('#winStars .star--on')).length >= 2, 'star rating shown');
+    check((await page.textContent('#winMemory')).startsWith('Best streak 6'), `memory report shown ("${(await page.textContent('#winMemory')).trim()}")`);
     await page.waitForSelector('#dailyResult:not([hidden])', { timeout: 3000 }).catch(() => {});
     check((await page.textContent('#dailyRank')).includes('Daily #'), `daily standing shown ("${(await page.textContent('#dailyRank')).trim()}")`);
     await page.waitForSelector('.daily-chart__bar--mine', { timeout: 3000 }).catch(() => {});

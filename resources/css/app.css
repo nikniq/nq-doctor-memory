@@ -1334,3 +1334,37 @@
     opacity: 1;
     background-color: var(--game-button);
 }
+
+/* Match streak badge beside the turn count */
+.streak-badge {
+    display: inline-block;
+    margin-left: 0.4em;
+    padding: 0 0.45em;
+    border-radius: 999px;
+    background-color: var(--game-button);
+    color: var(--game-button-text);
+    font-size: 0.7em;
+    font-weight: bold;
+    white-space: nowrap;
+}
+
+.streak-badge[hidden],
+#winMemory[hidden] {
+    display: none;
+}
+
+.streak-badge--pop {
+    animation: streakPop 0.35s ease-out;
+}
+
+@keyframes streakPop {
+    0% { transform: scale(0.6); }
+    60% { transform: scale(1.2); }
+    100% { transform: scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .streak-badge--pop {
+        animation: none;
+    }
+}
